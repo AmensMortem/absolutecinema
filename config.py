@@ -11,140 +11,90 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import classification_report
 
-# Импортируем tqdm для отслеживания прогресса
 from tqdm import tqdm
-
-# Импортируем инструменты NLTK для обработки текста
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
-from nltk.corpus import wordnet
-
-# Скачиваем необходимые пакеты для NLTK
-nltk.download('punkt')  # Для разбиения текста на слова (токенизация)
-nltk.download('stopwords')  # Список стоп-слов (the, an, a...)
-nltk.download('wordnet')  # База данных слов для лемматизации
-nltk.download('averaged_perceptron_tagger')  # Для определения частей речи (POS-tags)
-
-# Включаем поддержку tqdm для pandas методов (прогресс-бар для .progress_apply)
 tqdm.pandas()
 
 #############################################
-# CONFIGURATION (КОНФИГУРАЦИЯ)
+# КОНФИГУРАЦИЯ
 #############################################
 
-# НАСТРОЙКА ОКРУЖЕНИЯ:
-# Поставь True, если запускаешь код внутри Kaggle Notebook.
-# Поставь False, если запускаешь локально на компьютере.
-IS_KAGGLE_NOTEBOOK = False
+# Папка с датасетом — положи рядом со скриптом
+DATASET_DIR     = "./IMDb Movie Genre Classification"
+OVERVIEW_PATH   = os.path.join(DATASET_DIR, "movies_overview.csv")
+GENRES_PATH     = os.path.join(DATASET_DIR, "movies_genres.csv")
 
-# Ссылка на датасет Kaggle (нужна, если IS_KAGGLE_NOTEBOOK = False)
-KAGGLE_DATASET_URL = "https://www.kaggle.com/datasets/adilshamim8/nlp-task"
+TEXT_COLUMN  = "overview"
+GENRE_COLUMN = "genre_names"   # создадим сами при мерже
 
-# Пути к файлам (исправлено имя датасета согласно URL)
-if IS_KAGGLE_NOTEBOOK:
-    DATA_PATH = "/kaggle/input/nlp-task/movies.csv"
-else:
-    DATA_PATH = "./nlp-task/movies.csv"
+TEST_SIZE      = 0.2
+RANDOM_STATE   = 42
+BATCH_SIZE     = 64
+EPOCHS         = 5
+LEARNING_RATE  = 0.001
 
-# Названия целевых колонок в таблице
-TEXT_COLUMN = "plot"
-GENRE_COLUMN = "genres"
-
-# Параметры разделения данных и воспроизводимости
-TEST_SIZE = 0.2
-RANDOM_STATE = 42
-
-# Гиперпараметры нейросети
-BATCH_SIZE = 64
-EPOCHS = 5
-LEARNING_RATE = 0.001
-
-# Выбираем устройство для вычислений: GPU (CUDA/MPS), если доступны, иначе CPU
-device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-print(f"Используемое устройство для обучения: {device}")
+# GPU → MPS (Apple Silicon) → CPU
+device = torch.device(
+    "cuda" if torch.cuda.is_available()
+    else "mps" if torch.backends.mps.is_available()
+    else "cpu"
+)
+print(f"Устройство для обучения: {device}")
 
 #############################################
-# DATA DOWNLOAD & LOADING (ЗАГРУЗКА ДАННЫХ)
+# ЗАГРУЗКА И МЕРЖ ДАННЫХ
 #############################################
 
-# Если работаем локально и папки с данными еще нет — скачиваем ее
-if not IS_KAGGLE_NOTEBOOK and not os.path.exists(DATA_PATH):
-    import opendatasets as od
+import sys
 
-    print("Запускаю скачивание датасета с Kaggle...")
-    od.download(KAGGLE_DATASET_URL)
+for path in (OVERVIEW_PATH, GENRES_PATH):
+    if not os.path.exists(path):
+        print(
+            f"\n[!] Файл не найден: {os.path.abspath(path)}\n"
+            f"Положи папку 'IMDb Movie Genre Classification' рядом со скриптом.\n"
+        )
+        sys.exit(1)
 
-# Читаем CSV файл в DataFrame
-print("Загрузка данных в Pandas...")
-df = pd.read_csv(DATA_PATH)
+print("Загружаю данные...")
 
-# Избавляемся от лишних колонок и удаляем строки с пропусками (NaN)
-df = df[[TEXT_COLUMN, GENRE_COLUMN]].dropna()
+# movies_genres.csv  →  словарь {id: name}
+genres_df  = pd.read_csv(GENRES_PATH)
+id_to_name = dict(zip(genres_df["id"], genres_df["name"]))
 
+# movies_overview.csv  →  title, overview, genre_ids
+overview_df = pd.read_csv(OVERVIEW_PATH)
+overview_df = overview_df[["overview", "genre_ids"]].dropna()
 
-#############################################
-# GENRE PARSER (ПАРСЕР ЖАНРОВ)
-#############################################
-
-def parse_genres(x):
-    if isinstance(x, list):
-        return x
+# genre_ids — строка вида "[18, 80]", парсим и конвертируем id → названия
+def parse_genre_ids(x):
     try:
-        return ast.literal_eval(x)
-    except:
-        return [g.strip() for g in str(x).split(",")]
+        ids = ast.literal_eval(x) if isinstance(x, str) else x
+        return [id_to_name[i] for i in ids if i in id_to_name]
+    except Exception:
+        return []
 
+overview_df[GENRE_COLUMN] = overview_df["genre_ids"].apply(parse_genre_ids)
 
-# Применяем парсер к колонке жанров
-df[GENRE_COLUMN] = df[GENRE_COLUMN].apply(parse_genres)
+# Убираем строки без жанров
+overview_df = overview_df[overview_df[GENRE_COLUMN].map(len) > 0]
 
-#############################################
-# NLTK TEXT PREPROCESSING (ПРЕДОБРАБОТКА ТЕКСТА)
-#############################################
-
-lemmatizer = WordNetLemmatizer()
-stop_words = set(stopwords.words('english'))
-
-
-def get_wordnet_pos(treebank_tag):
-    """Вспомогательная функция для конвертации тегов частей речи NLTK в теги WordNet"""
-    if treebank_tag.startswith('J'):
-        return wordnet.ADJ
-    elif treebank_tag.startswith('V'):
-        return wordnet.VERB
-    elif treebank_tag.startswith('R'):
-        return wordnet.ADV
-    else:
-        return wordnet.NOUN  # По умолчанию существительное
-
-
-def clean_text_with_nltk(text):
-    text = str(text).lower()
-    tokens = word_tokenize(text)
-
-    # Определяем части речи для всего списка токенов сразу (так быстрее)
-    pos_tags = nltk.pos_tag(tokens)
-
-    cleaned_tokens = []
-    for token, tag in pos_tags:
-        if token.isalpha():
-            if token not in stop_words:
-                # Передаем правильную часть речи в лемматизатор
-                wordnet_pos = get_wordnet_pos(tag)
-                lemma = lemmatizer.lemmatize(token, pos=wordnet_pos)
-                cleaned_tokens.append(lemma)
-
-    return " ".join(cleaned_tokens)
-
-
-print("Запуск глубокой очистки текста через NLTK (лемматизация с POS-тегами)...")
-# Использование progress_apply покажет красивый прогресс-бар в консоли/ноутбуке
-df[TEXT_COLUMN] = df[TEXT_COLUMN].progress_apply(clean_text_with_nltk)
+df = overview_df[[TEXT_COLUMN, GENRE_COLUMN]].reset_index(drop=True)
+print(f"Загружено фильмов: {len(df)}")
 
 #############################################
-# DATA SPLIT & VECTORIZATION (ПОДГОТОВКА)
+# ПРЕДОБРАБОТКА ТЕКСТА (только базовая, без NLTK)
+# TF-IDF сам справляется с токенизацией и нормализацией
+#############################################
+
+def clean_text(text: str) -> str:
+    """Минимальная чистка: нижний регистр + убираем лишние пробелы.
+    TF-IDF обрабатывает пунктуацию и токенизацию внутри себя."""
+    return str(text).lower().strip()
+
+print("Чистка текстов...")
+df[TEXT_COLUMN] = df[TEXT_COLUMN].progress_apply(clean_text)
+
+#############################################
+# РАЗБИЕНИЕ ДАННЫХ И ВЕКТОРИЗАЦИЯ
 #############################################
 
 X_train_raw, X_test_raw, y_train_raw, y_test_raw = train_test_split(
@@ -154,26 +104,28 @@ X_train_raw, X_test_raw, y_train_raw, y_test_raw = train_test_split(
     random_state=RANDOM_STATE
 )
 
-# Ограничиваем словарь до 20000 самых частых униграм и биграм
-tfidf = TfidfVectorizer(ngram_range=(1, 2), max_features=20000)
+# Уни- и биграммы, топ-20 000 токенов
+tfidf = TfidfVectorizer(ngram_range=(1, 2), max_features=20_000)
 
-# ВАЖНО: Оставляем матрицы разреженными (убрали .toarray()), чтобы не забить RAM
+# Оставляем разреженные матрицы — экономим оперативную память
 X_train_tfidf = tfidf.fit_transform(X_train_raw)
-X_test_tfidf = tfidf.transform(X_test_raw)
+X_test_tfidf  = tfidf.transform(X_test_raw)
 
-# Переводим списки жанров в бинарную матрицу
+# Бинарная матрица жанров
 mlb = MultiLabelBinarizer()
 y_train_bin = mlb.fit_transform(y_train_raw)
-y_test_bin = mlb.transform(y_test_raw)
+y_test_bin  = mlb.transform(y_test_raw)
 
+print(f"Обучающая выборка: {X_train_tfidf.shape[0]} примеров")
+print(f"Тестовая выборка:  {X_test_tfidf.shape[0]} примеров")
+print(f"Кол-во жанров:     {len(mlb.classes_)}")
 
 #############################################
-# PYTORCH DATASET & DATALOADER
+# PYTORCH DATASET — конвертирует разреженную
+# матрицу в плотный тензор только для нужного батча
 #############################################
 
 class MovieDataset(Dataset):
-    """Кастомный класс, конвертирующий разреженную матрицу Scipy в плотные тензоры НА ЛЕТУ"""
-
     def __init__(self, X_sparse, y_bin):
         self.X = X_sparse
         self.y = torch.tensor(y_bin, dtype=torch.float32)
@@ -182,65 +134,75 @@ class MovieDataset(Dataset):
         return self.X.shape[0]
 
     def __getitem__(self, idx):
-        # Достаем одну строку из разреженной матрицы и превращаем её в плотный массив только в момент запроса батча
         x_dense = self.X[idx].toarray().squeeze()
         return torch.tensor(x_dense, dtype=torch.float32), self.y[idx]
 
-
-# Создаем объекты датасетов
 train_dataset = MovieDataset(X_train_tfidf, y_train_bin)
-test_dataset = MovieDataset(X_test_tfidf, y_test_bin)
+test_dataset  = MovieDataset(X_test_tfidf,  y_test_bin)
 
-# Нарезка на батчи
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
-
+test_loader  = DataLoader(test_dataset,  batch_size=BATCH_SIZE, shuffle=False)
 
 #############################################
-# NEURAL NETWORK ARCHITECTURE (МОДЕЛЬ)
+# АРХИТЕКТУРА МОДЕЛИ — MLP (3 скрытых слоя)
 #############################################
 
 class MovieGenreClassifier(nn.Module):
-    """Двухслойная полносвязная нейросеть (MLP)"""
+    """Многослойный перцептрон для мультилейбл-классификации жанров."""
 
-    def __init__(self, input_dim, num_classes):
+    def __init__(self, input_dim: int, num_classes: int):
         super().__init__()
-        self.fc1 = nn.Linear(input_dim, 256)
-        self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(0.3)
-        self.fc2 = nn.Linear(256, num_classes)
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(),
+            nn.Dropout(0.3),
 
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.relu(x)
-        x = self.dropout(x)
-        x = self.fc2(x)
-        return x
+            nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Dropout(0.3),
 
+            nn.Linear(256, 128),
+            nn.ReLU(),
 
-INPUT_DIM = X_train_tfidf.shape[1]
+            nn.Linear(128, num_classes),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
+
+INPUT_DIM   = X_train_tfidf.shape[1]   # 20 000
 NUM_CLASSES = y_train_bin.shape[1]
 
 model = MovieGenreClassifier(INPUT_DIM, NUM_CLASSES).to(device)
+print(f"\nМодель: {sum(p.numel() for p in model.parameters()):,} параметров")
 
 #############################################
-# LOSS & OPTIMIZER (ОШИБКА И ОПТИМИЗАТОР)
+# ФУНКЦИЯ ПОТЕРЬ И ОПТИМИЗАТОР
 #############################################
 
+# BCEWithLogitsLoss = Sigmoid + Binary Cross-Entropy
+# Подходит для мультилейбл-задач (каждый жанр — независимый бинарный классификатор)
 criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
+# Снижаем LR в 2 раза, если лосс не улучшается 2 эпохи подряд
+scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2, factor=0.5)
+
 #############################################
-# TRAINING LOOP (ЦИКЛ ОБУЧЕНИЯ)
+# ЦИКЛ ОБУЧЕНИЯ
 #############################################
 
-print("Старт обучения нейросети...")
-model.train()
+print("\nНачинаю обучение...")
 
 for epoch in range(EPOCHS):
+    model.train()
     running_loss = 0.0
-    for X_batch, y_batch in train_loader:
-        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+
+    for X_batch, y_batch in tqdm(train_loader, desc=f"Эпоха {epoch + 1}/{EPOCHS}", leave=False):
+        X_batch = X_batch.to(device)
+        y_batch = y_batch.to(device)
 
         optimizer.zero_grad()
         outputs = model(X_batch)
@@ -251,59 +213,61 @@ for epoch in range(EPOCHS):
         running_loss += loss.item() * X_batch.size(0)
 
     epoch_loss = running_loss / len(train_loader.dataset)
-    print(f"Эпоха [{epoch + 1}/{EPOCHS}] -> Ошибка (Loss): {epoch_loss:.4f}")
+    scheduler.step(epoch_loss)
+    print(f"Эпоха [{epoch + 1}/{EPOCHS}]  Loss: {epoch_loss:.4f}")
 
 #############################################
-# EVALUATION (ОЦЕНКА КАЧЕСТВА)
+# ОЦЕНКА КАЧЕСТВА НА ТЕСТЕ
 #############################################
 
 model.eval()
 all_preds = []
-all_true = []
+all_true  = []
 
 with torch.no_grad():
     for X_batch, y_batch in test_loader:
         X_batch = X_batch.to(device)
         outputs = model(X_batch)
+
+        # Порог 0.5: если sigmoid(logit) > 0.5 — жанр присвоен
         preds = (torch.sigmoid(outputs) > 0.5).cpu().numpy()
 
         all_preds.extend(preds)
         all_true.extend(y_batch.numpy())
 
-print("\n=== Отчет классификации на тестовой выборке ===")
-print(classification_report(all_true, all_preds, target_names=mlb.classes_, zero_division=0))
-
+print("\n=== Отчёт классификации (тестовая выборка) ===")
+print(classification_report(
+    all_true, all_preds,
+    target_names=mlb.classes_,
+    zero_division=0
+))
 
 #############################################
-# PREDICTION FUNCTION (ИНФЕРЕНС ДЛЯ НОВЫХ ТЕКСТОВ)
+# ИНФЕРЕНС — предсказание для нового текста
 #############################################
 
-def predict_genres(text):
-    """Функция принимает сырой текст и возвращает список предсказанных жанров"""
+def predict_genres(text: str) -> tuple:
+    """Принимает сырой текст → возвращает кортеж предсказанных жанров."""
     model.eval()
     with torch.no_grad():
-        cleaned_text = clean_text_with_nltk(text)
-        # Получаем разреженную строку, затем безопасно переводим в плотный вид для одной строки
-        vectorized = tfidf.transform([cleaned_text]).toarray().squeeze()
+        cleaned   = clean_text(text)
+        vectorized = tfidf.transform([cleaned]).toarray().squeeze()
 
-        tensor_input = torch.tensor(vectorized, dtype=torch.float32).unsqueeze(0).to(device)
+        tensor_in = torch.tensor(vectorized, dtype=torch.float32).unsqueeze(0).to(device)
+        outputs   = model(tensor_in)
+        preds     = (torch.sigmoid(outputs) > 0.5).int().cpu().numpy()
 
-        outputs = model(tensor_input)
-        preds = (torch.sigmoid(outputs) > 0.5).int().cpu().numpy()
-
-        labels = mlb.inverse_transform(preds)
-        return labels[0]
-
+        return mlb.inverse_transform(preds)[0]
 
 #############################################
-# DEMO RUN (ДЕМОНСТРАЦИЯ)
+# ДЕМОНСТРАЦИЯ
 #############################################
 
-example_plot = """
-A group of astronauts travel through space to save humanity from a dying Earth. 
+example = """
+A group of astronauts travel through space to save humanity from a dying Earth.
 They encounter strange anomalies, dangerous black holes, and distant unknown planets.
 """
 
-print("\n=== Демонстрация предсказания ===")
-print(f"Описание сюжета: {example_plot.strip()}")
-print(f"Предсказанные жанры: {predict_genres(example_plot)}")
+print("\n=== Демо-предсказание ===")
+print(f"Описание: {example.strip()}")
+print(f"Жанры:    {predict_genres(example)}")
