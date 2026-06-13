@@ -41,7 +41,7 @@ MAX_LEN = 128  # maximum length of tokens
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Training device: {device}")
 
-# ЗАГРУЗКА И МЁРЖ ДАННЫХ (TMDB формат)
+# loading and merging data tmdb format
 for path in (OVERVIEW_PATH, GENRES_PATH):
     if not os.path.exists(path):
         print(f"\n[!] File not found: {os.path.abspath(path)}\n")
