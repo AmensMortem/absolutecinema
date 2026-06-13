@@ -39,12 +39,12 @@ PATIENCE = 5  # BERT converges quickly -> patience less
 MAX_LEN = 128  # maximum length of tokens
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Устройство для обучения: {device}")
+print(f"Training device: {device}")
 
 # ЗАГРУЗКА И МЁРЖ ДАННЫХ (TMDB формат)
 for path in (OVERVIEW_PATH, GENRES_PATH):
     if not os.path.exists(path):
-        print(f"\n[!] Файл не найден: {os.path.abspath(path)}\n")
+        print(f"\n[!] File not found: {os.path.abspath(path)}\n")
         sys.exit(1)
 
 print("Downloading...")
@@ -73,7 +73,7 @@ overview_df[GENRE_COLUMN] = overview_df["genre_ids"].apply(parse_genre_ids)
 overview_df = overview_df[overview_df[GENRE_COLUMN].map(len) > 0]
 
 df = overview_df[[TEXT_COLUMN, GENRE_COLUMN]].reset_index(drop=True)
-print(f"Загружено фильмов: {len(df)}")
+print(f"Movies uploaded: {len(df)}")
 
 # DATA PREPARATION
 X_train_raw, X_temp, y_train_raw, y_temp = train_test_split(
@@ -179,7 +179,7 @@ class DistilBertGenreClassifier(nn.Module):
 
 NUM_CLASSES = y_train_bin.shape[1]
 model = DistilBertGenreClassifier(NUM_CLASSES).to(device)
-print(f"\nМодель: {sum(p.numel() for p in model.parameters()):,} параметров")
+print(f"\nModel: {sum(p.numel() for p in model.parameters()):,} parameters")
 
 # LOSS FUNCTION AND OPTIMIZER
 pos_counts = y_train_bin.sum(axis=0)
@@ -393,10 +393,10 @@ print(classification_report(
 # Prediction for a new text
 def predict_genres(text: str, mode: str = "precision") -> tuple:
     """
-    Принимает сырой текст → возвращает кортеж предсказанных жанров.
-    mode="f1"        — баланс precision/recall
-    mode="precision" — высокий precision, меньше лишних жанров (по умолчанию)
-    mode="accuracy"  — максимальный exact match
+    Takes raw text → returns a tuple of predicted genres.
+    mode="f1" — precision/recall balance
+    mode="precision" - high precision, fewer unnecessary genres (default)
+    mode="accuracy" — maximum exact match
     """
     if mode == "f1":
         threshold = best_t
