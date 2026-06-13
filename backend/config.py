@@ -19,7 +19,7 @@ tqdm.pandas()
 #############################################
 
 # Папка с датасетом — положи рядом со скриптом
-DATASET_DIR     = "IMDb Movie Genre Classification"
+DATASET_DIR     = "../IMDb Movie Genre Classification"
 OVERVIEW_PATH   = os.path.join(DATASET_DIR, "movies_overview.csv")
 GENRES_PATH     = os.path.join(DATASET_DIR, "movies_genres.csv")
 
