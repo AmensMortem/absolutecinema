@@ -1,6 +1,6 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLineEdit, QLabel, QPushButton
-from PyQt5.QtGui import QMovie
+from PyQt5.QtGui import QMovie, QFont
 from PyQt5.QtCore import Qt
 
 
@@ -19,30 +19,51 @@ class GifBackgroundApp(QWidget):
 
         self.movie = QMovie("sad-koi.gif")
         self.bg_label.setMovie(self.movie)
-        self.bg_label.setScaledContents(True)  # Ensures it fits the label exactly
+        self.bg_label.setScaledContents(True)
         self.movie.start()
 
-        # 3. Create the UI widgets
         self.input_field = QLineEdit()
         self.input_field.setFixedSize(y, 50)
+        self.input_field.setStyleSheet("""
+            QLineEdit {
+                background-color: #2b2b2b;  /* Dark gray background */
+                color: #ffffff;              /* White text color */
+                border: 2px solid #555555;   /* Dark border */
+                border-radius: 5px;          /* Slightly rounded corners */
+                padding: 5px;
+            }
+        """)
 
         self.input_field.setPlaceholderText("Description")
 
-        self.submit_btn = QPushButton("Submit")
-        # Connect the button click to our processing function
-        self.submit_btn.clicked.connect(self.handle_submit)
+        self.button = QPushButton("Submit")
+        self.button.setFixedSize(150, 50)
+        self.button.setFont(QFont("Montserrat Alternates SemiBold", 10))
+        self.button.clicked.connect(self.handle_submit)
 
+        self.button.setStyleSheet("""
+            QPushButton {
+                background-color: #2b2b2b;  /* Green background */
+                color: white;                /* White text */
+                border-radius: 4px;
+                font-weight: bold; 
+                
+            }
+            QPushButton:hover {
+                background-color: #45a049;  /* Darker green when you hover over it */
+            }
+            QPushButton:pressed {
+                background-color: #367c39;  /* Even darker green when clicked */
+            }
+        """)
         self.result_label = QLabel("Result will appear here")
-
-        # Styling the text so it's readable on top of a background
         self.result_label.setStyleSheet("color: white; font-size: 16px; font-weight: bold;")
         self.result_label.setAlignment(Qt.AlignCenter)
 
-        # 4. Use a layout to stack widgets on top of the background
         layout = QVBoxLayout()
-        layout.addStretch(1)  # Pushes widgets toward the center/bottom if desired
+        layout.addStretch(1)
         layout.addWidget(self.input_field)
-        layout.addWidget(self.submit_btn)
+        layout.addWidget(self.button, alignment=Qt.AlignCenter)
         layout.addWidget(self.result_label)
         layout.addStretch(1)
 
