@@ -1,7 +1,6 @@
 import os
 import sys
 import ast
-import copy
 import warnings
 import pandas as pd
 import torch
@@ -14,43 +13,35 @@ from torch.cuda.amp import GradScaler
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.metrics import classification_report, f1_score, precision_score, recall_score
-from transformers import DistilBertTokenizerFast, DistilBertModel
+from transformers import DistilBertTokenizerFast, DistilBertModel, get_linear_schedule_with_warmup
 
 from tqdm import tqdm
+
 tqdm.pandas()
 
-# Глушим предупреждения
 warnings.filterwarnings("ignore", category=UserWarning)
 
-#############################################
-# КОНФИГУРАЦИЯ
-#############################################
-
-# Папка с датасетом TMDB — положи рядом со скриптом
-DATASET_DIR   = "./IMDb Movie Genre Classification"
+# Configuration
+DATASET_DIR = "./IMDb Movie Genre Classification"
 OVERVIEW_PATH = os.path.join(DATASET_DIR, "movies_overview.csv")
-GENRES_PATH   = os.path.join(DATASET_DIR, "movies_genres.csv")
+GENRES_PATH = os.path.join(DATASET_DIR, "movies_genres.csv")
 
-TEXT_COLUMN  = "overview"
+TEXT_COLUMN = "overview"
 GENRE_COLUMN = "genre_names"
 
-RANDOM_STATE  = 42
-BATCH_SIZE    = 32          # DistilBERT тяжелее — батч меньше
-EPOCHS        = 20
-LEARNING_RATE = 2e-5        # стандартный LR для fine-tuning BERT-моделей
-WEIGHT_DECAY  = 1e-2
-THRESHOLD     = 0.5
-PATIENCE      = 5           # BERT сходится быстро — patience меньше
-MAX_LEN       = 128         # максимальная длина токенов — описания короткие
+RANDOM_STATE = 42
+BATCH_SIZE = 32  # DistilBERT heavier -> smaller batch
+EPOCHS = 20
+LEARNING_RATE = 2e-5  # STANDARD LR for fine-tuning BERT-models
+WEIGHT_DECAY = 1e-2
+THRESHOLD = 0.5
+PATIENCE = 5  # BERT converges quickly -> patience less
+MAX_LEN = 128  # maximum length of tokens
 
-# GPU → CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Устройство для обучения: {device}")
 
-#############################################
 # ЗАГРУЗКА И МЁРЖ ДАННЫХ (TMDB формат)
-#############################################
-
 for path in (OVERVIEW_PATH, GENRES_PATH):
     if not os.path.exists(path):
         print(f"\n[!] Файл не найден: {os.path.abspath(path)}\n")
@@ -59,12 +50,13 @@ for path in (OVERVIEW_PATH, GENRES_PATH):
 print("Downloading...")
 
 # movies_genres.csv  →  dict {id: name}
-genres_df  = pd.read_csv(GENRES_PATH)
+genres_df = pd.read_csv(GENRES_PATH)
 id_to_name = dict(zip(genres_df["id"], genres_df["name"]))
 
 # movies_overview.csv  →  overview, genre_ids
 overview_df = pd.read_csv(OVERVIEW_PATH)
 overview_df = overview_df[["overview", "genre_ids"]].dropna()
+
 
 # genre_ids — str: "[18, 80]", converting id → name
 def parse_genre_ids(x):
@@ -74,55 +66,50 @@ def parse_genre_ids(x):
     except Exception:
         return []
 
+
 overview_df[GENRE_COLUMN] = overview_df["genre_ids"].apply(parse_genre_ids)
 
-# Убираем строки без жанров
+# Removing lines without genres
 overview_df = overview_df[overview_df[GENRE_COLUMN].map(len) > 0]
 
 df = overview_df[[TEXT_COLUMN, GENRE_COLUMN]].reset_index(drop=True)
 print(f"Загружено фильмов: {len(df)}")
 
-#############################################
-# РАЗБИЕНИЕ ДАННЫХ
-#############################################
-
+# DATA PREPARATION
 X_train_raw, X_temp, y_train_raw, y_temp = train_test_split(
     df[TEXT_COLUMN],
     df[GENRE_COLUMN],
     test_size=0.3,
-    random_state=RANDOM_STATE
-)
+    random_state=RANDOM_STATE)
 
 X_val_raw, X_test_raw, y_val_raw, y_test_raw = train_test_split(
     X_temp,
     y_temp,
     test_size=0.5,
-    random_state=RANDOM_STATE
-)
+    random_state=RANDOM_STATE)
 
-# Бинарная матрица жанров
+# Binary matrix of genres
 mlb = MultiLabelBinarizer()
 y_train_bin = mlb.fit_transform(y_train_raw)
-y_val_bin   = mlb.transform(y_val_raw)
-y_test_bin  = mlb.transform(y_test_raw)
+y_val_bin = mlb.transform(y_val_raw)
+y_test_bin = mlb.transform(y_test_raw)
 
-print(f"Обучающая выборка: {len(X_train_raw)} примеров")
-print(f"Тестовая выборка:  {len(X_test_raw)} примеров")
-print(f"Кол-во жанров:     {len(mlb.classes_)}")
+print(f"Training set: {len(X_train_raw)} examples")
+print(f"Testing set: {len(X_test_raw)} examples")
+print(f"Number of genres: {len(mlb.classes_)}")
 
-#############################################
-# ТОКЕНИЗАЦИЯ — DistilBERT
-# DistilBERT токенизирует текст в последовательность ID токенов
-# с attention mask — указывает какие токены реальные, а какие padding
-#############################################
+# TOKENIZATION – DistilBERT
+# DistilBERT tokenizes text into a sequence of ID tokens
+# with attention mask - indicates which tokens are real and which ones padding
 
-print("Загружаем токенизатор DistilBERT...")
+print("Loading the tokenizer DistilBERT...")
 tokenizer = DistilBertTokenizerFast.from_pretrained("distilbert-base-uncased")
-print("Токенизатор загружен.")
+print("The tokenizer is loaded.")
+
 
 class MovieBertDataset(Dataset):
     def __init__(self, texts, labels):
-        # Токенизируем все тексты сразу — быстрее чем по одному
+        # We tokenize all texts at once - faster than one at a time
         self.encodings = tokenizer(
             list(texts),
             truncation=True,
@@ -137,42 +124,42 @@ class MovieBertDataset(Dataset):
 
     def __getitem__(self, idx):
         return {
-            "input_ids":      self.encodings["input_ids"][idx],
+            "input_ids": self.encodings["input_ids"][idx],
             "attention_mask": self.encodings["attention_mask"][idx],
-            "labels":         self.labels[idx]
+            "labels": self.labels[idx]
         }
 
-print("Токенизация датасетов...")
+
+print("Tokenization of datasets...")
 train_dataset = MovieBertDataset(X_train_raw, y_train_bin)
-val_dataset   = MovieBertDataset(X_val_raw,   y_val_bin)
-test_dataset  = MovieBertDataset(X_test_raw,  y_test_bin)
+val_dataset = MovieBertDataset(X_val_raw, y_val_bin)
+test_dataset = MovieBertDataset(X_test_raw, y_test_bin)
 
 # num_workers=0 на Windows
-train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,  num_workers=0, pin_memory=True)
-val_loader   = DataLoader(val_dataset,   batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=True)
-test_loader  = DataLoader(test_dataset,  batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=True)
+train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0, pin_memory=True)
+val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=True)
+test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=True)
 
-#############################################
-# МОДЕЛЬ — DistilBERT + классификатор
-# DistilBERT — облегчённый BERT (40% меньше параметров, 60% быстрее)
-# Fine-tuning: обучаем все веса BERT + добавляем свой классификатор сверху
-#############################################
+
+
+# MODEL = DistilBERT + classifier
+# DistilBERT - lightweight BERT (40% fewer parameters, 60% faster)
+# Fine-tuning: train all BERT weights + add your classifier on top
 
 class DistilBertGenreClassifier(nn.Module):
     """
-    DistilBERT для мультилейбл-классификации жанров.
-    Берём [CLS] токен как представление всего текста,
-    пропускаем через классификатор.
+    DistilBERT for multi-label genre classification.
+    We take the [CLS] token as a representation of the entire text, pass through the classifier.
     """
 
     def __init__(self, num_classes: int):
         super().__init__()
-        # Загружаем предобученный DistilBERT
+        # Loading the pretrained DistilBERT
         self.bert = DistilBertModel.from_pretrained("distilbert-base-uncased")
 
         hidden_size = self.bert.config.hidden_size  # 768
 
-        # Классификатор поверх [CLS] токена
+        # Classifier on top of [CLS] token
         self.classifier = nn.Sequential(
             nn.Linear(hidden_size, 256),
             nn.ReLU(),
@@ -181,57 +168,52 @@ class DistilBertGenreClassifier(nn.Module):
         )
 
     def forward(self, input_ids, attention_mask):
-        # DistilBERT возвращает hidden states для каждого токена
+        # DistilBERT returns hidden states for each token
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
 
-        # [CLS] токен — первый токен, представляет весь текст
+        # [CLS] the first token, represents the entire text
         cls_output = outputs.last_hidden_state[:, 0, :]
 
         return self.classifier(cls_output)
+
 
 NUM_CLASSES = y_train_bin.shape[1]
 model = DistilBertGenreClassifier(NUM_CLASSES).to(device)
 print(f"\nМодель: {sum(p.numel() for p in model.parameters()):,} параметров")
 
-#############################################
-# ФУНКЦИЯ ПОТЕРЬ И ОПТИМИЗАТОР
-#############################################
-
+# LOSS FUNCTION AND OPTIMIZER
 pos_counts = y_train_bin.sum(axis=0)
 neg_counts = y_train_bin.shape[0] - pos_counts
 pos_weight = neg_counts / (pos_counts + 1e-6)
 pos_weight = torch.tensor(pos_weight, dtype=torch.float32).to(device)
 
 # BCEWithLogitsLoss = Sigmoid + Binary Cross-Entropy
-# Подходит для мультилейбл-задач (каждый жанр — независимый бинарный классификатор)
 criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
-# AdamW — стандартный оптимизатор для fine-tuning трансформеров
+# AdamW — standard optimizer for fine-tuning transformers
 optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
-# Линейный warmup + decay — стандартная стратегия для BERT
+# Linear warmup + decay - standard strategy for BERT
 total_steps = len(train_loader) * EPOCHS
-from transformers import get_linear_schedule_with_warmup
+
 scheduler = get_linear_schedule_with_warmup(
     optimizer,
-    num_warmup_steps=total_steps // 10,   # 10% шагов — warmup
+    num_warmup_steps=total_steps // 10,  # 10% steps — warmup
     num_training_steps=total_steps
 )
 
-# AMP — автоматическая смешанная точность: экономит VRAM вдвое
+# AMP — automatic mixed precision: saves VRAM by half
 use_amp = (device.type == "cuda")
-scaler  = GradScaler(enabled=use_amp)
+scaler = GradScaler(enabled=use_amp)
 
-#############################################
 # Training
-#############################################
 print("\nTraining...")
 
-train_losses     = []
-train_f1_scores  = []
+train_losses = []
+train_f1_scores = []
 train_accuracies = []
 
-best_val_f1      = 0.0
+best_val_f1 = 0.0
 best_model_state = None
 no_improve_epochs = 0
 
@@ -239,19 +221,19 @@ for epoch in range(EPOCHS):
     model.train()
     running_loss = 0.0
 
-    for batch in tqdm(train_loader, desc=f"Эпоха {epoch+1}/{EPOCHS}", leave=False):
-        input_ids      = batch["input_ids"].to(device, non_blocking=True)
+    for batch in tqdm(train_loader, desc=f"Эпоха {epoch + 1}/{EPOCHS}", leave=False):
+        input_ids = batch["input_ids"].to(device, non_blocking=True)
         attention_mask = batch["attention_mask"].to(device, non_blocking=True)
-        labels         = batch["labels"].to(device, non_blocking=True)
+        labels = batch["labels"].to(device, non_blocking=True)
 
         optimizer.zero_grad()
         with torch.amp.autocast(device_type=device.type, enabled=use_amp):
             outputs = model(input_ids, attention_mask)
-            loss    = criterion(outputs, labels)
+            loss = criterion(outputs, labels)
 
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
-        # Gradient clipping — стандарт для трансформеров
+        # Gradient clipping
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         scaler.step(optimizer)
         scaler.update()
@@ -262,14 +244,14 @@ for epoch in range(EPOCHS):
     epoch_loss = running_loss / len(train_loader.dataset)
     train_losses.append(epoch_loss)
 
-    # Валидация
+    # Validation
     model.eval()
     all_preds = []
-    all_true  = []
+    all_true = []
 
     with torch.no_grad():
         for batch in val_loader:
-            input_ids      = batch["input_ids"].to(device, non_blocking=True)
+            input_ids = batch["input_ids"].to(device, non_blocking=True)
             attention_mask = batch["attention_mask"].to(device, non_blocking=True)
             with torch.amp.autocast(device_type=device.type, enabled=use_amp):
                 outputs = model(input_ids, attention_mask)
@@ -277,54 +259,52 @@ for epoch in range(EPOCHS):
             all_preds.extend(preds)
             all_true.extend(batch["labels"].numpy())
 
-    micro    = f1_score(all_true, all_preds, average="micro", zero_division=0)
-    macro    = f1_score(all_true, all_preds, average="macro", zero_division=0)
+    micro = f1_score(all_true, all_preds, average="micro", zero_division=0)
+    macro = f1_score(all_true, all_preds, average="macro", zero_division=0)
     accuracy = np.mean(np.all(np.array(all_preds) == np.array(all_true), axis=1))
 
     train_f1_scores.append(micro)
     train_accuracies.append(accuracy)
 
-    print(f"Epoch [{epoch+1}/{EPOCHS}] Loss: {epoch_loss:.4f} | "
+    print(f"Epoch [{epoch + 1}/{EPOCHS}] Loss: {epoch_loss:.4f} | "
           f"Val Micro F1: {micro:.4f} | Val Macro F1: {macro:.4f} | "
           f"Val Accuracy: {accuracy:.4f} (exact match)")
 
-    # Early stopping — сохраняем лучшую модель
+    # Early stopping, save the best model
     if micro > best_val_f1:
-        best_val_f1      = micro
+        best_val_f1 = micro
         best_model_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
         no_improve_epochs = 0
     else:
         no_improve_epochs += 1
         if no_improve_epochs >= PATIENCE:
-            print(f"\nEarly stopping на эпохе {epoch+1} — val F1 не улучшался {PATIENCE} эпох.")
+            print(f"\nEarly stopping on epoch {epoch + 1} — val F1 didn't improve {PATIENCE} epoch.")
             break
 
 # Загружаем лучшие веса
 if best_model_state is not None:
     model.load_state_dict({k: v.to(device) for k, v in best_model_state.items()})
-    print(f"Загружены лучшие веса (val Micro F1 = {best_val_f1:.4f})")
+    print(f"Top weights loaded (val Micro F1 = {best_val_f1:.4f})")
 
 metrics_df = pd.DataFrame({
-    "epoch":    range(1, len(train_losses) + 1),
-    "loss":     train_losses,
+    "epoch": range(1, len(train_losses) + 1),
+    "loss": train_losses,
     "micro_f1": train_f1_scores,
     "accuracy": train_accuracies
 })
 metrics_df.to_csv("training_history.csv", index=False)
-print("История обучения сохранена в training_history.csv")
+print("The learning history is saved in training_history.csv")
 
-#############################################
-# ПОИСК ОПТИМАЛЬНОГО ПОРОГА НА ВАЛИДАЦИИ
-# Делаем ДО тест-оценки, чтобы применить best_t на тесте
-#############################################
+# SEARCHING FOR THE OPTIMAL THRESHOLD FOR VALIDATION
+# We do it BEFORE the test evaluation in order to apply best_t on the test
 
 val_probs = []
-val_true  = []
+val_true = []
 
 model.eval()
 with torch.no_grad():
     for batch in val_loader:
-        input_ids      = batch["input_ids"].to(device, non_blocking=True)
+        input_ids = batch["input_ids"].to(device, non_blocking=True)
         attention_mask = batch["attention_mask"].to(device, non_blocking=True)
         with torch.amp.autocast(device_type=device.type, enabled=use_amp):
             outputs = model(input_ids, attention_mask)
@@ -332,52 +312,50 @@ with torch.no_grad():
         val_true.extend(batch["labels"].numpy())
 
 val_probs = np.array(val_probs)
-val_true  = np.array(val_true)
+val_true = np.array(val_true)
 
 # Порог для Micro F1
-best_t  = 0.5
+best_t = 0.5
 best_f1 = 0.0
 for t in np.arange(0.1, 0.9, 0.02):
     f1 = f1_score(val_true, (val_probs > t), average="micro", zero_division=0)
     if f1 > best_f1:
         best_f1 = f1
-        best_t  = t
+        best_t = t
 
-# Порог для Exact Match
+# Exact Match
 best_t_acc = 0.5
-best_acc   = 0.0
+best_acc = 0.0
 for t in np.arange(0.1, 0.95, 0.02):
     acc = np.mean(np.all((val_probs > t) == val_true, axis=1))
     if acc > best_acc:
-        best_acc   = acc
+        best_acc = acc
         best_t_acc = t
 
-# Порог для High Precision (recall >= 35%)
-best_t_prec = 0.5
-best_prec   = 0.0
+# High Precision (recall >= 35%)
+best_t_precision = 0.5
+best_precision = 0.0
 for t in np.arange(0.3, 0.95, 0.02):
     rec = recall_score(val_true, (val_probs > t), average="micro", zero_division=0)
     if rec < 0.35:
         break
     prec = precision_score(val_true, (val_probs > t), average="micro", zero_division=0)
-    if prec > best_prec:
-        best_prec   = prec
-        best_t_prec = t
+    if prec > best_precision:
+        best_precision = prec
+        best_t_precision = t
 
-print(f"\n BEST THRESHOLD (Micro F1):      {round(best_t, 2)}  → F1={round(best_f1, 4)}")
-print(f" BEST THRESHOLD (High Precision): {round(best_t_prec, 2)}  → Precision={round(best_prec, 4)}")
-print(f" BEST THRESHOLD (Exact Match):    {round(best_t_acc, 2)}  → Accuracy={round(best_acc*100, 1)}%")
+print(f"\n BEST THRESHOLD (Micro F1): {round(best_t, 2)} -> F1={round(best_f1, 4)}")
+print(f" BEST THRESHOLD (High Precision): {round(best_t_precision, 2)} -> Precision={round(best_precision, 4)}")
+print(f" BEST THRESHOLD (Exact Match): {round(best_t_acc, 2)} -> Accuracy={round(best_acc * 100, 1)}%")
 
-#############################################
-# ОЦЕНКА КАЧЕСТВА НА ТЕСТЕ — три режима
-#############################################
 
+# QUALITY ASSESSMENT ON THE TEST - three modes
 def evaluate(threshold, label):
     preds_list = []
     model.eval()
     with torch.no_grad():
         for batch in test_loader:
-            input_ids      = batch["input_ids"].to(device, non_blocking=True)
+            input_ids = batch["input_ids"].to(device, non_blocking=True)
             attention_mask = batch["attention_mask"].to(device, non_blocking=True)
             with torch.amp.autocast(device_type=device.type, enabled=use_amp):
                 outputs = model(input_ids, attention_mask)
@@ -387,21 +365,22 @@ def evaluate(threshold, label):
     prec = precision_score(all_true_list, p, average="micro", zero_division=0)
     rec = recall_score(all_true_list, p, average="micro", zero_division=0)
     acc = np.mean(np.all(p == np.array(all_true_list), axis=1))
-    print(f"\n=== {label} (порог={round(threshold,2)}) ===")
+    print(f"\n=== {label} (порог={round(threshold, 2)}) ===")
     print(f"Precision:{prec:.4f}")
     print(f"Recall:{rec:.4f}")
     print(f"Micro F1:{micro:.4f}")
-    print(f"Exact Match Accuracy:{acc:.4f} ({acc*100:.1f}%)")
+    print(f"Exact Match Accuracy:{acc:.4f} ({acc * 100:.1f}%)")
     return p
+
 
 all_true_list = []
 with torch.no_grad():
     for batch in test_loader:
         all_true_list.extend(batch["labels"].numpy())
 
-all_preds_f1   = evaluate(best_t,      "Режим Micro F1")
-all_preds_prec = evaluate(best_t_prec, "Режим High Precision")
-all_preds_acc  = evaluate(best_t_acc,  "Режим Exact Match")
+all_preds_f1 = evaluate(best_t, "mode Micro F1")
+all_preds_prec = evaluate(best_t_precision, "mode High Precision")
+all_preds_acc = evaluate(best_t_acc, "mode Exact Match")
 
 print("\n=== Детальный отчёт (High Precision режим) ===")
 print(classification_report(
@@ -410,10 +389,8 @@ print(classification_report(
     zero_division=0
 ))
 
-#############################################
-# ИНФЕРЕНС — предсказание для нового текста
-#############################################
 
+# Prediction for a new text
 def predict_genres(text: str, mode: str = "precision") -> tuple:
     """
     Принимает сырой текст → возвращает кортеж предсказанных жанров.
@@ -426,11 +403,11 @@ def predict_genres(text: str, mode: str = "precision") -> tuple:
     elif mode == "accuracy":
         threshold = best_t_acc
     else:
-        threshold = best_t_prec
+        threshold = best_t_precision
 
     model.eval()
     with torch.no_grad():
-        # DistilBERT токенизирует текст целиком — понимает контекст фразы
+        # DistilBERT tokenization
         encoding = tokenizer(
             str(text),
             truncation=True,
@@ -438,15 +415,12 @@ def predict_genres(text: str, mode: str = "precision") -> tuple:
             max_length=MAX_LEN,
             return_tensors="pt"
         )
-        input_ids      = encoding["input_ids"].to(device)
+        input_ids = encoding["input_ids"].to(device)
         attention_mask = encoding["attention_mask"].to(device)
         outputs = model(input_ids, attention_mask)
-        preds   = (torch.sigmoid(outputs) > threshold).int().cpu().numpy()
+        preds = (torch.sigmoid(outputs) > threshold).int().cpu().numpy()
         return mlb.inverse_transform(preds)[0]
 
-#############################################
-# ДЕМОНСТРАЦИЯ
-#############################################
 
 example = """
 A group of astronauts travel through space to save humanity from a dying Earth.
