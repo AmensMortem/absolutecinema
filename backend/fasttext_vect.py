@@ -28,7 +28,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 ##############################################
 
 # Folder with the TMDB dataset - place it next to the script
-DATASET_DIR = "../IMDb Movie Genre Classification"
+DATASET_DIR = "IMDb Movie Genre Classification"
 OVERVIEW_PATH = os.path.join(DATASET_DIR, "movies_overview.csv")
 GENRES_PATH = os.path.join(DATASET_DIR, "movies_genres.csv")
 
