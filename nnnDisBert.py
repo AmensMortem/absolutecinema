@@ -17,7 +17,6 @@ from transformers import DistilBertTokenizerFast, DistilBertModel, get_linear_sc
 
 from tqdm import tqdm
 
-from data.BROpt.config import example
 
 tqdm.pandas()
 
@@ -28,10 +27,10 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # КОНФИГУРАЦИЯ
 #############################################
 
-DATASET_DIR   = "./IMDb Movie Genre Classification"
-OVERVIEW_PATH = os.path.join(DATASET_DIR, "movies_overview.csv")
-GENRES_PATH   = os.path.join(DATASET_DIR, "movies_genres.csv")
-
+DATASET_DIR   = "IMDb Movie Genre Classification/"
+OVERVIEW_PATH = "IMDb Movie Genre Classification/movies_overview.csv"
+GENRES_PATH   = "IMDb Movie Genre Classification/movies_genres.csv"
+print('HALLO', OVERVIEW_PATH)
 TEXT_COLUMN  = "overview"
 GENRE_COLUMN = "genre_names"
 
@@ -42,7 +41,7 @@ LEARNING_RATE = 2e-5        # стандартный LR для fine-tuning BERT
 WEIGHT_DECAY  = 1e-2
 THRESHOLD = 0.5
 PATIENCE = 7           # было 5 — даём больше времени на плато
-MAX_LEN = 128         # описания короткие — 128 токенов хватает
+MAX_LEN = 256         # описания короткие — 128 токенов хватает
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Устройство для обучения: {device}")
@@ -51,12 +50,12 @@ print(f"Устройство для обучения: {device}")
 # ЗАГРУЗКА ДАННЫХ (TMDB формат)
 #############################################
 
-for path in (OVERVIEW_PATH, GENRES_PATH):
-    if not os.path.exists(path):
-        print(f"\n[!] Файл не найден: {os.path.abspath(path)}\n")
-        sys.exit(1)
-
-print("Downloading...")
+# for path in (OVERVIEW_PATH, GENRES_PATH):
+#     if not os.path.exists(path):
+#         print(f"\n[!] Файл не найден: {os.path.abspath(path)}\n")
+#         sys.exit(1)
+#
+# print("Downloading...")
 
 # movies_genres.csv  →  dict {id: name}
 genres_df  = pd.read_csv(GENRES_PATH)
