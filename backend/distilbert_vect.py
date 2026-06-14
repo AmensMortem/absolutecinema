@@ -30,8 +30,8 @@ TEXT_COLUMN = "overview"
 GENRE_COLUMN = "genre_names"
 
 RANDOM_STATE = 42
-BATCH_SIZE = 32  # DistilBERT heavier -> smaller batch
-EPOCHS = 20
+BATCH_SIZE = 16  # DistilBERT heavier -> smaller batch
+EPOCHS = 40
 LEARNING_RATE = 2e-5  # STANDARD LR for fine-tuning BERT-models
 WEIGHT_DECAY = 1e-2
 THRESHOLD = 0.5
