@@ -27,10 +27,10 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # Configuration
 #############################################
 
-DATASET_DIR   = "IMDb Movie Genre Classification/"
+DATASET_DIR = "IMDb Movie Genre Classification/"
 OVERVIEW_PATH = "IMDb Movie Genre Classification/movies_overview.csv"
-GENRES_PATH   = "IMDb Movie Genre Classification/movies_genres.csv"
-TEXT_COLUMN  = "overview"
+GENRES_PATH = "IMDb Movie Genre Classification/movies_genres.csv"
+TEXT_COLUMN = "overview"
 GENRE_COLUMN = "genre_names"
 
 RANDOM_STATE  = 42
@@ -50,7 +50,7 @@ print(f"Device: {device}")
 #############################################
 
 # movies_genres.csv  →  dict {id: name}
-genres_df  = pd.read_csv(GENRES_PATH)
+genres_df = pd.read_csv(GENRES_PATH)
 id_to_name = dict(zip(genres_df["id"], genres_df["name"]))
 
 # movies_overview.csv  →  overview, genre_ids
@@ -86,8 +86,8 @@ X_val_raw, X_test_raw, y_val_raw, y_test_raw = train_test_split(
 # Genre Binary Matrix
 mlb = MultiLabelBinarizer()
 y_train_bin = mlb.fit_transform(y_train_raw)
-y_val_bin   = mlb.transform(y_val_raw)
-y_test_bin  = mlb.transform(y_test_raw)
+y_val_bin = mlb.transform(y_val_raw)
+y_test_bin = mlb.transform(y_test_raw)
 
 print(f"Train: {len(X_train_raw)} samples")
 print(f"Test: {len(X_test_raw)} samoles")
@@ -117,9 +117,9 @@ class MovieBertDataset(Dataset):
 
     def __getitem__(self, idx):
         return {
-            "input_ids":      self.encodings["input_ids"][idx],
+            "input_ids": self.encodings["input_ids"][idx],
             "attention_mask": self.encodings["attention_mask"][idx],
-            "labels":         self.labels[idx]
+            "labels": self.labels[idx]
         }
 
 train_dataset = MovieBertDataset(X_train_raw, y_train_bin)
@@ -192,18 +192,18 @@ scheduler = get_linear_schedule_with_warmup(
 
 # AMP
 use_amp = (device.type == "cuda")
-scaler  = GradScaler("cuda", enabled=use_amp)
+scaler = GradScaler("cuda", enabled=use_amp)
 
 #############################################
 # Training
 #############################################
 print("\nTraining...")
 
-train_losses     = []
-train_f1_scores  = []
+train_losses = []
+train_f1_scores = []
 train_accuracies = []
 
-best_val_f1      = 0.0
+best_val_f1 = 0.0
 best_model_state = None
 no_improve_epochs = 0
 
@@ -212,14 +212,14 @@ for epoch in range(EPOCHS):
     running_loss = 0.0
 
     for batch in tqdm(train_loader, desc=f"Эпоха {epoch+1}/{EPOCHS}", leave=False):
-        input_ids      = batch["input_ids"].to(device, non_blocking=True)
+        input_ids = batch["input_ids"].to(device, non_blocking=True)
         attention_mask = batch["attention_mask"].to(device, non_blocking=True)
-        labels         = batch["labels"].to(device, non_blocking=True)
+        labels = batch["labels"].to(device, non_blocking=True)
 
         optimizer.zero_grad()
         with torch.amp.autocast(device_type=device.type, enabled=use_amp):
             outputs = model(input_ids, attention_mask)
-            loss    = criterion(outputs, labels)
+            loss = criterion(outputs, labels)
 
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
@@ -237,7 +237,7 @@ for epoch in range(EPOCHS):
     # Validation
     model.eval()
     all_preds = []
-    all_true  = []
+    all_true = []
 
     with torch.no_grad():
         for batch in val_loader:
@@ -262,7 +262,7 @@ for epoch in range(EPOCHS):
 
     # Early stopping
     if micro > best_val_f1:
-        best_val_f1      = micro
+        best_val_f1 = micro
         best_model_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
         no_improve_epochs = 0
     else:
@@ -401,10 +401,10 @@ def predict_genres(text: str, mode: str = "precision") -> tuple:
             max_length=MAX_LEN,
             return_tensors="pt"
         )
-        input_ids      = encoding["input_ids"].to(device)
+        input_ids = encoding["input_ids"].to(device)
         attention_mask = encoding["attention_mask"].to(device)
         outputs = model(input_ids, attention_mask)
-        preds   = (torch.sigmoid(outputs) > threshold).int().cpu().numpy()
+        preds = (torch.sigmoid(outputs) > threshold).int().cpu().numpy()
         return mlb.inverse_transform(preds)[0]
 
 #############################################
