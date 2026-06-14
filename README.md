@@ -7,35 +7,19 @@ descriptions are short, and the label distribution is heavily imbalanced.
 ### We built and compared three different systems:
 
 **TF-IDF + MLP** - a classic baseline
+
 **FastText + TF-IDF** weighted MLP - something in between
+
 **DistilBERT** - a pretrained transformer, fine-tuned on our data
 
 #### **The DistilBERT model showed the best results:**
 
-Micro F1 of 0.66, Precision of 0.76, Recall of 0.70. All code is in PyTorch. TensorFlow was not used.
+Micro F1 of 0.66, Precision of 0.76, Recall of 0.70.
 
 # Dataset
+We used IMDb-based dataset across our three models, since we started with one and switched to another partway through the project.
+All models use the IMDb Movie Genre Classification dataset in TMDB format. It consists of two CSV files: movies_overview.csv, which contains movie descriptions and numeric genre IDs, and movies_genres.csv, which maps those IDs to human-readable genre names. Genre IDs are stored as JSON-like strings (e.g. "[18, 80]") and need to be parsed and mapped at load time.
 
-We used two different IMDb-based datasets across our three models.
-
-**TF-IDF MLP** and FastText models use the IMDb Movie Genre Classification dataset (TMDB format). It has two CSV files:
-movies_overview.csv with text descriptions and numeric genre IDs, and movies_genres.csv that maps IDs to genre names
-like Drama or Comedy.
-
-**DistilBERT** model uses the IMDb Movies Dataset Based on Genre from Kaggle (rajugc, 2023). It's a set of per-genre CSV
-files - action.csv, comedy.csv, etc. - downloaded automatically at runtime using the Kaggle API. Each row has a
-description field and a comma-separated genre string like "Action, Thriller, Crime".
-Preprocessing
-
-**TF-IDF MLP**: lowercase + strip. That's basically it, TF-IDF handles the rest internally.
-
-**FastText MLP**: lowercase + remove all punctuation with regex. Important because FastText looks words up in a
-dictionary -
-punctuation attached to a word breaks the lookup.
-
-**DistilBERT**: no manual cleaning needed - the tokenizer handles everything. We removed placeholder descriptions like "
-Add
-a plot" and "Plot unknown", dropped duplicates, and filtered out genres with fewer than 50 examples.
 
 # Preprocessing
 
@@ -44,8 +28,7 @@ a plot" and "Plot unknown", dropped duplicates, and filtered out genres with few
 **FastText MLP:** lowercase + remove all punctuation with regex. Important because FastText looks words up in a
 dictionary - punctuation attached to a word breaks the lookup.
 
-**DistilBERT**: no manual cleaning needed - the tokenizer handles everything. We removed placeholder descriptions like "
-Add a plot" and "Plot unknown", dropped duplicates, and filtered out genres with fewer than 50 examples.
+**DistilBERT**: no manual cleaning needed - the tokenizer handles everything.
 
 **All models**: 70/15/15 train/val/test split, fixed seed 42. MultiLabelBinarizer fits only on training data.
 
@@ -88,6 +71,7 @@ performance. We fine-tune it on our data with a small classification head on top
 * FastText MLP: dense vector, 300 dimensions (L2-normalized)
 * DistilBERT: sequence of up to 128 token IDs + attention mask
 
+# Output
 # Evaluation Metrics
 
 We use four metrics:
