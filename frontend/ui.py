@@ -90,10 +90,3 @@ class GifBackgroundApp(QWidget):
         entered_text = self.input_field.text()
         output = self.backend(entered_text)
         self.result_label.setText(output)
-
-
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    ex = GifBackgroundApp()
-    ex.show()
-    sys.exit(app.exec_stdout() if hasattr(sys, 'exec_stdout') else app.exec_())
