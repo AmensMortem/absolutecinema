@@ -20,7 +20,7 @@ def save_model(
 ):
     os.makedirs(save_dir, exist_ok=True)
     torch.save(model.state_dict(), os.path.join(save_dir, "model_weights.pt"))  # model weights
-    np.save(os.path.join(save_dir, "mlb_classes.npy"), mlb.classes_)  # genre classses
+    np.save(os.path.join(save_dir, "mlb_classes.npy"), mlb.classes_)  # genre classes
 
     with open(os.path.join(save_dir, "thresholds.json"), "w") as f:
         json.dump({
@@ -33,8 +33,8 @@ def save_model(
 
     size_mb = os.path.getsize(os.path.join(save_dir, "model_weights.pt")) / 1024 / 1024
     print(f"Model saved to: {os.path.abspath(save_dir)}/")
-    print(f"  model_weights.pt  ({size_mb:.1f} MB)")
-    print(f"  mlb_classes.npy   ({num_classes} genres)")
-    print(f"  thresholds.json   (f1={round(best_t, 2)}, "
+    print(f"model_weights.pt  ({size_mb:.1f} MB)")
+    print(f"mlb_classes.npy   ({num_classes} genres)")
+    print(f"thresholds.json   (f1={round(best_t, 2)}, "
           f"precision={round(best_t_prec, 2)}, accuracy={round(best_t_acc, 2)})")
-    print(f"  config.json")
+    print(f"config.json")

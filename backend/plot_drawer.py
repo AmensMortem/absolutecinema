@@ -8,7 +8,7 @@ def draw(name):
     # Loss
     plt.figure(figsize=(10, 5))
     plt.plot(df["epoch"], df["loss"], marker="o")
-    plt.title("Training Loss")
+    plt.title(f"Training Loss, {name.split('_')[2]}")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.grid(True)
@@ -18,7 +18,7 @@ def draw(name):
     # Accuracy
     plt.figure(figsize=(10, 5))
     plt.plot(df["epoch"], df["accuracy"], marker="o")
-    plt.title("Training Accuracy")
+    plt.title(f"Training Accuracy, {name.split('_')[2]}")
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy")
     plt.grid(True)
@@ -26,4 +26,5 @@ def draw(name):
     plt.show()
 
 for file in os.listdir("./training_statistic"):
+    print()
     draw(file)

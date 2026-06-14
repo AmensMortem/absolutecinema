@@ -365,7 +365,7 @@ metrics_df = pd.DataFrame({
     "accuracy": train_accuracies
 })
 metrics_df.to_csv("training_history_high_presicion.csv", index=False)
-print("Training history saved in training_history.csv")
+
 
 # OPTIMUM THRESHOLD FOR VALIDATION to apply best_t on the test
 val_probs = []
