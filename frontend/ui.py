@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QLabel, QPushButton
 from PyQt5.QtGui import QMovie, QFont
 from PyQt5.QtCore import Qt
 from absolutecinema.backend import interface
+import sys
 
 model, tokenizer, mlb, thresholds, max_len = interface.load_model("./saved_model")
 
@@ -89,3 +90,10 @@ class GifBackgroundApp(QWidget):
         entered_text = self.input_field.text()
         output = self.backend(entered_text)
         self.result_label.setText(output)
+
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    ex = GifBackgroundApp()
+    ex.show()
+    sys.exit(app.exec_stdout() if hasattr(sys, 'exec_stdout') else app.exec_())
