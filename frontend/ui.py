@@ -4,7 +4,7 @@ from PyQt5.QtGui import QMovie, QFont
 from PyQt5.QtCore import Qt
 from transformers.testing_utils import backend
 
-from ..backend import interface
+from absolutecinema.backend import interface
 
 model, tokenizer, mlb, thresholds, max_len = interface.load_model("./saved_model")
 
@@ -51,8 +51,8 @@ class GifBackgroundApp(QWidget):
                 background-color: #2b2b2b;  /* Green background */
                 color: white;                /* White text */
                 border-radius: 4px;
-                font-weight: bold; 
-                
+                font-weight: bold;
+
             }
             QPushButton:hover {
                 background-color: #45a049;  /* Darker green when you hover over it */
@@ -94,8 +94,23 @@ class GifBackgroundApp(QWidget):
         self.result_label.setText(output)
 
 
+def backend_(user_text):
+    if not user_text.strip():
+        return "You didn't type anything!"
+    genres = interface.predict(
+        text=user_text,
+        model=model,
+        tokenizer=tokenizer,
+        mlb=mlb,
+        thresholds=thresholds,
+        max_len=max_len,
+        mode="precision"
+    )
+    return f"Processed: {genres}"
+
+
 if __name__ == '__main__':
-    print(backend("A detective investigates a murder in 1940s Los Angeles."))
+    print(backend_("A detective investigates a murder in 1940s Los Angeles."))
     # app = QApplication(sys.argv)
     # ex = GifBackgroundApp()
     # ex.show()
