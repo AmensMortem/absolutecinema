@@ -385,6 +385,4 @@ example = "When a menace known as the Joker wreaks havoc and chaos on the people
 
 print("\n=== Demo-prediction ===")
 print(f"Describtion: {example.strip()}")
-print(f"F1 mode:  {predict_genres(example, mode='f1')}")
-print(f"Precision mode: {predict_genres(example, mode='precision')}")
-print(f"Accuracy mode: {predict_genres(example, mode='accuracy')}")
+print(f"Result:{predict_genres(example, mode='precision')}")
