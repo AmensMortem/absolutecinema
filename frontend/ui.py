@@ -75,7 +75,7 @@ class GifBackgroundApp(QWidget):
     def backend(self, user_text):
         if not user_text.strip():
             return "You didn't type anything!"
-        genres = interface.predict(
+        genres = ", ".join(interface.predict(
             text=user_text,
             model=model,
             tokenizer=tokenizer,
@@ -83,8 +83,8 @@ class GifBackgroundApp(QWidget):
             thresholds=thresholds,
             max_len=max_len,
             mode="precision"
-        )
-        return f"Processed: {genres}"
+        ))
+        return genres
 
     def handle_submit(self):
         entered_text = self.input_field.text()
@@ -92,16 +92,8 @@ class GifBackgroundApp(QWidget):
         self.result_label.setText(output)
 
 
-def backend_(user_text):
-    if not user_text.strip():
-        return "You didn't type anything!"
-    genres = interface.predict(
-        text=user_text,
-        model=model,
-        tokenizer=tokenizer,
-        mlb=mlb,
-        thresholds=thresholds,
-        max_len=max_len,
-        mode="precision"
-    )
-    return f"Processed: {genres}"
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    ex = GifBackgroundApp()
+    ex.show()
+    sys.exit(app.exec_stdout() if hasattr(sys, 'exec_stdout') else app.exec_())
