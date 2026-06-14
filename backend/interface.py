@@ -75,8 +75,7 @@ def load_model(load_dir: str):
 
     print(f"Model loaded from: {os.path.abspath(load_dir)}")
     print(f"  Genres: {cfg['num_classes']}  |  max_len: {cfg['max_len']}")
-    print(f"  Thresholds: f1={thresholds['f1']}, "
-          f"precision={thresholds['precision']}, accuracy={thresholds['accuracy']}")
+    print(f"precision={thresholds['precision']}")
 
     return model, tokenizer, mlb, thresholds, cfg["max_len"]
 
