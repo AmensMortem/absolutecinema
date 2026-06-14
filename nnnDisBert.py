@@ -23,14 +23,13 @@ tqdm.pandas()
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-#############################################
-# Configuration
-#############################################
 
-DATASET_DIR   = "IMDb Movie Genre Classification/"
+# Configuration
+
+DATASET_DIR = "IMDb Movie Genre Classification/"
 OVERVIEW_PATH = "IMDb Movie Genre Classification/movies_overview.csv"
-GENRES_PATH   = "IMDb Movie Genre Classification/movies_genres.csv"
-TEXT_COLUMN  = "overview"
+GENRES_PATH = "IMDb Movie Genre Classification/movies_genres.csv"
+TEXT_COLUMN = "overview"
 GENRE_COLUMN = "genre_names"
 
 RANDOM_STATE  = 42
@@ -45,19 +44,17 @@ MAX_LEN = 128
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Device: {device}")
 
-#############################################
 # Data downloading
-#############################################
 
-# movies_genres.csv  →  dict {id: name}
-genres_df  = pd.read_csv(GENRES_PATH)
+# movies_genres.csv  ->  dict {id: name}
+genres_df = pd.read_csv(GENRES_PATH)
 id_to_name = dict(zip(genres_df["id"], genres_df["name"]))
 
-# movies_overview.csv  →  overview, genre_ids
+# movies_overview.csv  ->  overview, genre_ids
 overview_df = pd.read_csv(OVERVIEW_PATH)
 overview_df = overview_df[["overview", "genre_ids"]].dropna()
 
-# genre_ids — str: "[18, 80]", converting id → name
+# genre_ids — str: "[18, 80]", converting id -> name
 def parse_genre_ids(x):
     try:
         ids = ast.literal_eval(x) if isinstance(x, str) else x
@@ -72,9 +69,9 @@ overview_df = overview_df[overview_df[GENRE_COLUMN].map(len) > 0]
 df = overview_df[[TEXT_COLUMN, GENRE_COLUMN]].reset_index(drop=True)
 print(f"Movies are downloaded: {len(df)}")
 
-#############################################
+
 # Splitting data
-#############################################
+
 
 X_train_raw, X_temp, y_train_raw, y_temp = train_test_split(
     df[TEXT_COLUMN], df[GENRE_COLUMN], test_size=0.3, random_state=RANDOM_STATE
@@ -86,16 +83,15 @@ X_val_raw, X_test_raw, y_val_raw, y_test_raw = train_test_split(
 # Genre Binary Matrix
 mlb = MultiLabelBinarizer()
 y_train_bin = mlb.fit_transform(y_train_raw)
-y_val_bin   = mlb.transform(y_val_raw)
-y_test_bin  = mlb.transform(y_test_raw)
+y_val_bin = mlb.transform(y_val_raw)
+y_test_bin = mlb.transform(y_test_raw)
 
 print(f"Train: {len(X_train_raw)} samples")
 print(f"Test: {len(X_test_raw)} samoles")
 print(f"Number of genres: {len(mlb.classes_)}")
 
-#############################################
+
 # DistilBERT Tokenization
-#############################################
 
 print("DistilBERT downloading")
 tokenizer = DistilBertTokenizerFast.from_pretrained("distilbert-base-uncased")
@@ -117,9 +113,9 @@ class MovieBertDataset(Dataset):
 
     def __getitem__(self, idx):
         return {
-            "input_ids":      self.encodings["input_ids"][idx],
+            "input_ids": self.encodings["input_ids"][idx],
             "attention_mask": self.encodings["attention_mask"][idx],
-            "labels":         self.labels[idx]
+            "labels": self.labels[idx]
         }
 
 train_dataset = MovieBertDataset(X_train_raw, y_train_bin)
@@ -131,9 +127,8 @@ train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,  n
 val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=True)
 test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=True)
 
-#############################################
+
 # Model
-#############################################
 
 class DistilBertGenreClassifier(nn.Module):
     """
@@ -167,9 +162,8 @@ NUM_CLASSES = y_train_bin.shape[1]
 model = DistilBertGenreClassifier(NUM_CLASSES).to(device)
 print(f"\nМодель: {sum(p.numel() for p in model.parameters()):,} параметров")
 
-#############################################
+
 # Loss Function
-#############################################
 
 pos_counts = y_train_bin.sum(axis=0)
 neg_counts = y_train_bin.shape[0] - pos_counts
@@ -192,18 +186,18 @@ scheduler = get_linear_schedule_with_warmup(
 
 # AMP
 use_amp = (device.type == "cuda")
-scaler  = GradScaler("cuda", enabled=use_amp)
+scaler = GradScaler("cuda", enabled=use_amp)
 
-#############################################
+
 # Training
-#############################################
+
 print("\nTraining...")
 
-train_losses     = []
-train_f1_scores  = []
+train_losses = []
+train_f1_scores = []
 train_accuracies = []
 
-best_val_f1      = 0.0
+best_val_f1 = 0.0
 best_model_state = None
 no_improve_epochs = 0
 
@@ -212,14 +206,14 @@ for epoch in range(EPOCHS):
     running_loss = 0.0
 
     for batch in tqdm(train_loader, desc=f"Эпоха {epoch+1}/{EPOCHS}", leave=False):
-        input_ids      = batch["input_ids"].to(device, non_blocking=True)
+        input_ids = batch["input_ids"].to(device, non_blocking=True)
         attention_mask = batch["attention_mask"].to(device, non_blocking=True)
-        labels         = batch["labels"].to(device, non_blocking=True)
+        labels = batch["labels"].to(device, non_blocking=True)
 
         optimizer.zero_grad()
         with torch.amp.autocast(device_type=device.type, enabled=use_amp):
             outputs = model(input_ids, attention_mask)
-            loss    = criterion(outputs, labels)
+            loss = criterion(outputs, labels)
 
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
@@ -237,7 +231,7 @@ for epoch in range(EPOCHS):
     # Validation
     model.eval()
     all_preds = []
-    all_true  = []
+    all_true = []
 
     with torch.no_grad():
         for batch in val_loader:
@@ -262,7 +256,7 @@ for epoch in range(EPOCHS):
 
     # Early stopping
     if micro > best_val_f1:
-        best_val_f1      = micro
+        best_val_f1 = micro
         best_model_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
         no_improve_epochs = 0
     else:
@@ -283,9 +277,8 @@ metrics_df = pd.DataFrame({
 })
 metrics_df.to_csv("training_history_disBert.csv", index=False)
 
-#############################################
+
 # Search for optimal threshold on validation
-#############################################
 
 val_probs = []
 val_true = []
@@ -337,9 +330,8 @@ print(f"\n BEST THRESHOLD (Micro F1): {round(best_t, 2)}  → F1={round(best_f1,
 print(f" BEST THRESHOLD (High Precision): {round(best_t_prec, 2)}  → Precision={round(best_prec, 4)}")
 print(f" BEST THRESHOLD (Exact Match): {round(best_t_acc, 2)}  → Accuracy={round(best_acc*100, 1)}%")
 
-#############################################
+
 # Test
-#############################################
 
 def evaluate(threshold, label):
     preds_list = []
@@ -379,9 +371,8 @@ print(classification_report(
     zero_division=0
 ))
 
-#############################################
+
 # Interface
-#############################################
 
 def predict_genres(text: str, mode: str = "precision") -> tuple:
     if mode == "f1":
@@ -401,15 +392,15 @@ def predict_genres(text: str, mode: str = "precision") -> tuple:
             max_length=MAX_LEN,
             return_tensors="pt"
         )
-        input_ids      = encoding["input_ids"].to(device)
+        input_ids = encoding["input_ids"].to(device)
         attention_mask = encoding["attention_mask"].to(device)
         outputs = model(input_ids, attention_mask)
-        preds   = (torch.sigmoid(outputs) > threshold).int().cpu().numpy()
+        preds = (torch.sigmoid(outputs) > threshold).int().cpu().numpy()
         return mlb.inverse_transform(preds)[0]
 
-#############################################
+
 # Demonstration
-#############################################
+
 
 '''example = """
 A group of astronauts travel through space to save humanity from a dying Earth.
