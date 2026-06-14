@@ -396,7 +396,6 @@ metrics_df = pd.DataFrame({
     "accuracy": train_accuracies
 })
 metrics_df.to_csv("training_history_fasttext.csv", index=False)
-print("Training history saved in training_history.csv")
 
 
 # SEARCHING FOR THE OPTIMUM THRESHOLD FOR VALIDATION

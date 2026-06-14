@@ -30,13 +30,13 @@ TEXT_COLUMN = "overview"
 GENRE_COLUMN = "genre_names"
 
 RANDOM_STATE = 42
-BATCH_SIZE = 16  # DistilBERT heavier -> smaller batch
+BATCH_SIZE = 32  # DistilBERT heavier -> smaller batch
 EPOCHS = 40
 LEARNING_RATE = 2e-5  # STANDARD LR for fine-tuning BERT-models
 WEIGHT_DECAY = 1e-2
 THRESHOLD = 0.5
 PATIENCE = 5  # BERT converges quickly -> patience less
-MAX_LEN = 128  # maximum length of tokens
+MAX_LEN = 256  # maximum length of tokens
 
 device = torch.device(
     "cuda" if torch.cuda.is_available()
@@ -294,7 +294,6 @@ metrics_df = pd.DataFrame({
     "accuracy": train_accuracies
 })
 metrics_df.to_csv("training_history_distilbert.csv", index=False)
-print("The learning history is saved in training_history.csv")
 
 # SEARCHING FOR THE OPTIMAL THRESHOLD FOR VALIDATION
 # We do it BEFORE the test evaluation in order to apply best_t on the test
