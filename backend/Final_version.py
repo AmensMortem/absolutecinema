@@ -342,9 +342,8 @@ with torch.no_grad():
     for batch in test_loader:
         all_true_list.extend(batch["labels"].numpy())
 
-all_preds_prec = evaluate(best_t_prec, "Режим High Precision")
+all_preds_prec = evaluate(best_t_prec, "High Precision")
 
-print("\n=== Report (High Precision режим) ===")
 print(classification_report(
     all_true_list, all_preds_prec,
     target_names=mlb.classes_,

@@ -31,17 +31,16 @@ TEXT_COLUMN = "overview"
 GENRE_COLUMN = "genre_names"
 
 RANDOM_STATE = 42
-BATCH_SIZE = 64  # dataset is small - smaller batches, more precisely gradients
-EPOCHS = 30  # small dataset converges slower
+BATCH_SIZE = 64 
+EPOCHS = 30 
 LEARNING_RATE = 0.001
-WEIGHT_DECAY = 1e-4  # L2 regularization - reduces overfitting
+WEIGHT_DECAY = 1e-4
 THRESHOLD = 0.5
-PATIENCE = 7  # Early stopping: stop if val F1 does not increase N epochs
+PATIENCE = 7 
 
-FASTTEXT_PATH = "cc.en.300.bin"  # path to the FastText file next to the script
-FASTTEXT_DIM = 300  # dimension of FastText vectors
+FASTTEXT_PATH = "cc.en.300.bin" 
+FASTTEXT_DIM = 300 
 
-# GPU -> MPS (Apple Silicon) -> CPU
 device = torch.device(
     "cuda" if torch.cuda.is_available()
     else "mps" if torch.backends.mps.is_available()
@@ -476,7 +475,7 @@ print(classification_report(
 ))
 
 
-def predict_genres(text: str, mode: str = "precision") -> tuple:  # prediction for a new text
+def predict_genres(text: str, mode: str = "precision") -> tuple:
     """
     Takes raw text -> returns a tuple of predicted genres.
     mode="f1" — precision/recall balance (more genres)
@@ -501,7 +500,7 @@ def predict_genres(text: str, mode: str = "precision") -> tuple:  # prediction f
         return mlb.inverse_transform(preds)[0]
 
 
-# DEMONSTRATION of usage
+# DEMONSTRATION
 example = """
 A group of astronauts travel through space to save humanity from a dying Earth.
 They encounter strange anomalies, dangerous black holes, and distant unknown planets.
