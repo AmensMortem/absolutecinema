@@ -12,9 +12,7 @@ descriptions are short, and the label distribution is heavily imbalanced.
 
 #### **The DistilBERT model showed the best results:**
 
-Micro F1 of 0.66, Precision of 0.76, Recall of 0.70. All code is in
-
-PyTorch. TensorFlow was not used.
+Micro F1 of 0.66, Precision of 0.76, Recall of 0.70. All code is in PyTorch. TensorFlow was not used.
 
 # Dataset
 
