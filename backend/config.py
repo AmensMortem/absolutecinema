@@ -15,17 +15,14 @@ from tqdm import tqdm
 
 tqdm.pandas()
 
-#############################################
-# КОНФИГУРАЦИЯ
-#############################################
-
-# Папка с датасетом — положи рядом со скриптом
+# CONFIGURATION
+# Folder with the dataset - put it next to the script
 DATASET_DIR = "../IMDb Movie Genre Classification"
 OVERVIEW_PATH = os.path.join(DATASET_DIR, "movies_overview.csv")
 GENRES_PATH = os.path.join(DATASET_DIR, "movies_genres.csv")
 
 TEXT_COLUMN = "overview"
-GENRE_COLUMN = "genre_names"  # создадим сами при мерже
+GENRE_COLUMN = "genre_names"  # we will create it ourselves during the merge
 
 TEST_SIZE = 0.2
 RANDOM_STATE = 42
@@ -33,40 +30,38 @@ BATCH_SIZE = 64
 EPOCHS = 5
 LEARNING_RATE = 0.001
 
-# GPU → MPS (Apple Silicon) → CPU
+# GPU -> MPS (Apple Silicon) -> CPU
 device = torch.device(
     "cuda" if torch.cuda.is_available()
     else "mps" if torch.backends.mps.is_available()
-    else "cpu"
-)
-print(f"Устройство для обучения: {device}")
+    else "cpu")
+print(f"Device for training: {device}")
 
-#############################################
-# ЗАГРУЗКА И МЕРЖ ДАННЫХ
-#############################################
+# LOADING AND MERGING DATA
+
 
 import sys
 
 for path in (OVERVIEW_PATH, GENRES_PATH):
     if not os.path.exists(path):
         print(
-            f"\n[!] Файл не найден: {os.path.abspath(path)}\n"
-            f"Положи папку 'IMDb Movie Genre Classification' рядом со скриптом.\n"
+            f"\n[!] File not found: {os.path.abspath(path)}\n"
+            f"Put the 'IMDb Movie Genre Classification' folder next to the script.\n"
         )
         sys.exit(1)
 
-print("Загружаю данные...")
+print("Loading data...")
 
-# movies_genres.csv  →  словарь {id: name}
+# movies_genres.csv -> dictionary {id: name}
 genres_df = pd.read_csv(GENRES_PATH)
 id_to_name = dict(zip(genres_df["id"], genres_df["name"]))
 
-# movies_overview.csv  →  title, overview, genre_ids
+# movies_overview.csv ->-> title, overview, genre_ids
 overview_df = pd.read_csv(OVERVIEW_PATH)
 overview_df = overview_df[["overview", "genre_ids"]].dropna()
 
 
-# genre_ids — строка вида "[18, 80]", парсим и конвертируем id → названия
+# genre_ids - a string like "[18, 80]", parse and convert id -> names
 def parse_genre_ids(x):
     try:
         ids = ast.literal_eval(x) if isinstance(x, str) else x
@@ -77,30 +72,28 @@ def parse_genre_ids(x):
 
 overview_df[GENRE_COLUMN] = overview_df["genre_ids"].apply(parse_genre_ids)
 
-# Убираем строки без жанров
+# Remove lines without genres
 overview_df = overview_df[overview_df[GENRE_COLUMN].map(len) > 0]
 
 df = overview_df[[TEXT_COLUMN, GENRE_COLUMN]].reset_index(drop=True)
-print(f"Загружено фильмов: {len(df)}")
+print(f"Movies loaded: {len(df)}")
 
 
-#############################################
-# ПРЕДОБРАБОТКА ТЕКСТА (только базовая, без NLTK)
-# TF-IDF сам справляется с токенизацией и нормализацией
-#############################################
+# TEXT PREPROCESSING (basic only, without NLTK)
+# TF-IDF handles tokenization and normalization itself
+
 
 def clean_text(text: str) -> str:
-    """Минимальная чистка: нижний регистр + убираем лишние пробелы.
-    TF-IDF обрабатывает пунктуацию и токенизацию внутри себя."""
+    """Minimal cleaning: lowercase + remove extra spaces.
+    TF-IDF handles punctuation and tokenization internally."""
     return str(text).lower().strip()
 
 
-print("Чистка текстов...")
+print("Cleaning texts...")
 df[TEXT_COLUMN] = df[TEXT_COLUMN].progress_apply(clean_text)
 
-#############################################
-# РАЗБИЕНИЕ ДАННЫХ И ВЕКТОРИЗАЦИЯ
-#############################################
+# DATA PARTITIONING AND VECTORIZATION
+
 
 X_train_raw, X_test_raw, y_train_raw, y_test_raw = train_test_split(
     df[TEXT_COLUMN],
@@ -109,27 +102,26 @@ X_train_raw, X_test_raw, y_train_raw, y_test_raw = train_test_split(
     random_state=RANDOM_STATE
 )
 
-# Уни- и биграммы, топ-20 000 токенов
+# Uni- and bigrams, top 20,000 tokens
 tfidf = TfidfVectorizer(ngram_range=(1, 2), max_features=20_000)
 
-# Оставляем разреженные матрицы — экономим оперативную память
+# Leave sparse matrices - save RAM
 X_train_tfidf = tfidf.fit_transform(X_train_raw)
 X_test_tfidf = tfidf.transform(X_test_raw)
 
-# Бинарная матрица жанров
+# Binary matrix of genres
 mlb = MultiLabelBinarizer()
 y_train_bin = mlb.fit_transform(y_train_raw)
 y_test_bin = mlb.transform(y_test_raw)
 
-print(f"Обучающая выборка: {X_train_tfidf.shape[0]} примеров")
-print(f"Тестовая выборка:  {X_test_tfidf.shape[0]} примеров")
-print(f"Кол-во жанров:     {len(mlb.classes_)}")
+print(f"Training set: {X_train_tfidf.shape[0]} examples")
+print(f"Test sample: {X_test_tfidf.shape[0]} examples")
+print(f"Number of genres: {len(mlb.classes_)}")
 
 
-#############################################
-# PYTORCH DATASET — конвертирует разреженную
-# матрицу в плотный тензор только для нужного батча
-#############################################
+# PYTORCH DATASET - converts sparse
+# matrix into a dense tensor only for the required batch
+
 
 class MovieDataset(Dataset):
     def __init__(self, X_sparse, y_bin):
@@ -151,12 +143,11 @@ train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
 
-#############################################
-# АРХИТЕКТУРА МОДЕЛИ — MLP (3 скрытых слоя)
-#############################################
+# MODEL ARCHITECTURE - MLP (3 hidden layers)
+
 
 class MovieGenreClassifier(nn.Module):
-    """Многослойный перцептрон для мультилейбл-классификации жанров."""
+    """Multilayer perceptron for multi-label genre classification."""
 
     def __init__(self, input_dim: int, num_classes: int):
         super().__init__()
@@ -181,35 +172,33 @@ class MovieGenreClassifier(nn.Module):
         return self.net(x)
 
 
-INPUT_DIM = X_train_tfidf.shape[1]  # 20 000
+INPUT_DIM = X_train_tfidf.shape[1]  # 20,000
 NUM_CLASSES = y_train_bin.shape[1]
 
 model = MovieGenreClassifier(INPUT_DIM, NUM_CLASSES).to(device)
-print(f"\nМодель: {sum(p.numel() for p in model.parameters()):,} параметров")
+print(f"\nModel: {sum(p.numel() for p in model.parameters()):,} parameters")
 
-#############################################
-# ФУНКЦИЯ ПОТЕРЬ И ОПТИМИЗАТОР
-#############################################
+# LOSS FUNCTION AND OPTIMIZER
+
 
 # BCEWithLogitsLoss = Sigmoid + Binary Cross-Entropy
-# Подходит для мультилейбл-задач (каждый жанр — независимый бинарный классификатор)
+# Suitable for multi-label tasks (each genre is an independent binary classifier)
 criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-# Снижаем LR в 2 раза, если лосс не улучшается 2 эпохи подряд
+# Reduce LR by 2 times if the loss does not improve for 2 epochs in a row
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2, factor=0.5)
 
-#############################################
-# ЦИКЛ ОБУЧЕНИЯ
-#############################################
+# LEARNING CYCLE
 
-print("\nНачинаю обучение...")
+
+print("\nStarting training...")
 train_losses = []
 for epoch in range(EPOCHS):
     model.train()
     running_loss = 0.0
 
-    for X_batch, y_batch in tqdm(train_loader, desc=f"Эпоха {epoch + 1}/{EPOCHS}", leave=False):
+    for X_batch, y_batch in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{EPOCHS}", leave=False):
         X_batch = X_batch.to(device)
         y_batch = y_batch.to(device)
 
@@ -224,16 +213,16 @@ for epoch in range(EPOCHS):
     epoch_loss = running_loss / len(train_loader.dataset)
     train_losses.append(epoch_loss)
     scheduler.step(epoch_loss)
-    print(f"Эпоха [{epoch + 1}/{EPOCHS}]  Loss: {epoch_loss:.4f}")
+    print(f"Epoch [{epoch + 1}/{EPOCHS}] Loss: {epoch_loss:.4f}")
 
 metrics_df = pd.DataFrame({
     "epoch": range(1, len(train_losses) + 1),
     "loss": train_losses})
 metrics_df.to_csv("training_history_fasttext.csv", index=False)
 print("Training history saved in training_history.csv")
-#############################################
-# ОЦЕНКА КАЧЕСТВА НА ТЕСТЕ
-#############################################
+
+# QUALITY ASSESSMENT ON THE TEST
+
 
 model.eval()
 all_preds = []
@@ -244,13 +233,13 @@ with torch.no_grad():
         X_batch = X_batch.to(device)
         outputs = model(X_batch)
 
-        # Порог 0.5: если sigmoid(logit) > 0.5 — жанр присвоен
+        # Threshold 0.5: if sigmoid(logit) > 0.5 - genre is assigned
         preds = (torch.sigmoid(outputs) > 0.5).cpu().numpy()
 
         all_preds.extend(preds)
         all_true.extend(y_batch.numpy())
 
-print("\n=== Отчёт классификации (тестовая выборка) ===")
+print("\n=== Classification report (test set) ===")
 print(classification_report(
     all_true, all_preds,
     target_names=mlb.classes_,
@@ -258,12 +247,11 @@ print(classification_report(
 ))
 
 
-#############################################
-# ИНФЕРЕНС — предсказание для нового текста
-#############################################
+# INFERENCE - prediction for a new text
+
 
 def predict_genres(text: str) -> tuple:
-    """Принимает сырой текст → возвращает кортеж предсказанных жанров."""
+    """Accepts raw text -> returns a tuple of predicted genres."""
     model.eval()
     with torch.no_grad():
         cleaned = clean_text(text)
@@ -276,15 +264,14 @@ def predict_genres(text: str) -> tuple:
         return mlb.inverse_transform(preds)[0]
 
 
-#############################################
-# ДЕМОНСТРАЦИЯ
-#############################################
+# DEMONSTRATION
+
 
 example = """
 A group of astronauts travel through space to save humanity from a dying Earth.
 They encounter strange anomalies, dangerous black holes, and distant unknown planets.
 """
 
-print("\n=== Демо-предсказание ===")
-print(f"Описание: {example.strip()}")
-print(f"Жанры:    {predict_genres(example)}")
+print("\n=== Demo prediction ===")
+print(f"Description: {example.strip()}")
+print(f"Genres: {predict_genres(example)}")
