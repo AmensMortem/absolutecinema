@@ -12,6 +12,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import classification_report
 
 from tqdm import tqdm
+
 tqdm.pandas()
 
 #############################################
@@ -19,18 +20,18 @@ tqdm.pandas()
 #############################################
 
 # Папка с датасетом — положи рядом со скриптом
-DATASET_DIR     = "../IMDb Movie Genre Classification"
-OVERVIEW_PATH   = os.path.join(DATASET_DIR, "movies_overview.csv")
-GENRES_PATH     = os.path.join(DATASET_DIR, "movies_genres.csv")
+DATASET_DIR = "../IMDb Movie Genre Classification"
+OVERVIEW_PATH = os.path.join(DATASET_DIR, "movies_overview.csv")
+GENRES_PATH = os.path.join(DATASET_DIR, "movies_genres.csv")
 
-TEXT_COLUMN  = "overview"
-GENRE_COLUMN = "genre_names"   # создадим сами при мерже
+TEXT_COLUMN = "overview"
+GENRE_COLUMN = "genre_names"  # создадим сами при мерже
 
-TEST_SIZE      = 0.2
-RANDOM_STATE   = 42
-BATCH_SIZE     = 64
-EPOCHS         = 5
-LEARNING_RATE  = 0.001
+TEST_SIZE = 0.2
+RANDOM_STATE = 42
+BATCH_SIZE = 64
+EPOCHS = 5
+LEARNING_RATE = 0.001
 
 # GPU → MPS (Apple Silicon) → CPU
 device = torch.device(
@@ -57,12 +58,13 @@ for path in (OVERVIEW_PATH, GENRES_PATH):
 print("Загружаю данные...")
 
 # movies_genres.csv  →  словарь {id: name}
-genres_df  = pd.read_csv(GENRES_PATH)
+genres_df = pd.read_csv(GENRES_PATH)
 id_to_name = dict(zip(genres_df["id"], genres_df["name"]))
 
 # movies_overview.csv  →  title, overview, genre_ids
 overview_df = pd.read_csv(OVERVIEW_PATH)
 overview_df = overview_df[["overview", "genre_ids"]].dropna()
+
 
 # genre_ids — строка вида "[18, 80]", парсим и конвертируем id → названия
 def parse_genre_ids(x):
@@ -72,6 +74,7 @@ def parse_genre_ids(x):
     except Exception:
         return []
 
+
 overview_df[GENRE_COLUMN] = overview_df["genre_ids"].apply(parse_genre_ids)
 
 # Убираем строки без жанров
@@ -79,6 +82,7 @@ overview_df = overview_df[overview_df[GENRE_COLUMN].map(len) > 0]
 
 df = overview_df[[TEXT_COLUMN, GENRE_COLUMN]].reset_index(drop=True)
 print(f"Загружено фильмов: {len(df)}")
+
 
 #############################################
 # ПРЕДОБРАБОТКА ТЕКСТА (только базовая, без NLTK)
@@ -89,6 +93,7 @@ def clean_text(text: str) -> str:
     """Минимальная чистка: нижний регистр + убираем лишние пробелы.
     TF-IDF обрабатывает пунктуацию и токенизацию внутри себя."""
     return str(text).lower().strip()
+
 
 print("Чистка текстов...")
 df[TEXT_COLUMN] = df[TEXT_COLUMN].progress_apply(clean_text)
@@ -109,16 +114,17 @@ tfidf = TfidfVectorizer(ngram_range=(1, 2), max_features=20_000)
 
 # Оставляем разреженные матрицы — экономим оперативную память
 X_train_tfidf = tfidf.fit_transform(X_train_raw)
-X_test_tfidf  = tfidf.transform(X_test_raw)
+X_test_tfidf = tfidf.transform(X_test_raw)
 
 # Бинарная матрица жанров
 mlb = MultiLabelBinarizer()
 y_train_bin = mlb.fit_transform(y_train_raw)
-y_test_bin  = mlb.transform(y_test_raw)
+y_test_bin = mlb.transform(y_test_raw)
 
 print(f"Обучающая выборка: {X_train_tfidf.shape[0]} примеров")
 print(f"Тестовая выборка:  {X_test_tfidf.shape[0]} примеров")
 print(f"Кол-во жанров:     {len(mlb.classes_)}")
+
 
 #############################################
 # PYTORCH DATASET — конвертирует разреженную
@@ -137,11 +143,13 @@ class MovieDataset(Dataset):
         x_dense = self.X[idx].toarray().squeeze()
         return torch.tensor(x_dense, dtype=torch.float32), self.y[idx]
 
+
 train_dataset = MovieDataset(X_train_tfidf, y_train_bin)
-test_dataset  = MovieDataset(X_test_tfidf,  y_test_bin)
+test_dataset = MovieDataset(X_test_tfidf, y_test_bin)
 
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-test_loader  = DataLoader(test_dataset,  batch_size=BATCH_SIZE, shuffle=False)
+test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
+
 
 #############################################
 # АРХИТЕКТУРА МОДЕЛИ — MLP (3 скрытых слоя)
@@ -172,7 +180,8 @@ class MovieGenreClassifier(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
 
-INPUT_DIM   = X_train_tfidf.shape[1]   # 20 000
+
+INPUT_DIM = X_train_tfidf.shape[1]  # 20 000
 NUM_CLASSES = y_train_bin.shape[1]
 
 model = MovieGenreClassifier(INPUT_DIM, NUM_CLASSES).to(device)
@@ -195,7 +204,7 @@ scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2, factor=0
 #############################################
 
 print("\nНачинаю обучение...")
-
+train_losses = []
 for epoch in range(EPOCHS):
     model.train()
     running_loss = 0.0
@@ -213,16 +222,22 @@ for epoch in range(EPOCHS):
         running_loss += loss.item() * X_batch.size(0)
 
     epoch_loss = running_loss / len(train_loader.dataset)
+    train_losses.append(epoch_loss)
     scheduler.step(epoch_loss)
     print(f"Эпоха [{epoch + 1}/{EPOCHS}]  Loss: {epoch_loss:.4f}")
 
+metrics_df = pd.DataFrame({
+    "epoch": range(1, len(train_losses) + 1),
+    "loss": train_losses})
+metrics_df.to_csv("training_history_fasttext.csv", index=False)
+print("Training history saved in training_history.csv")
 #############################################
 # ОЦЕНКА КАЧЕСТВА НА ТЕСТЕ
 #############################################
 
 model.eval()
 all_preds = []
-all_true  = []
+all_true = []
 
 with torch.no_grad():
     for X_batch, y_batch in test_loader:
@@ -242,6 +257,7 @@ print(classification_report(
     zero_division=0
 ))
 
+
 #############################################
 # ИНФЕРЕНС — предсказание для нового текста
 #############################################
@@ -250,14 +266,15 @@ def predict_genres(text: str) -> tuple:
     """Принимает сырой текст → возвращает кортеж предсказанных жанров."""
     model.eval()
     with torch.no_grad():
-        cleaned   = clean_text(text)
+        cleaned = clean_text(text)
         vectorized = tfidf.transform([cleaned]).toarray().squeeze()
 
         tensor_in = torch.tensor(vectorized, dtype=torch.float32).unsqueeze(0).to(device)
-        outputs   = model(tensor_in)
-        preds     = (torch.sigmoid(outputs) > 0.5).int().cpu().numpy()
+        outputs = model(tensor_in)
+        preds = (torch.sigmoid(outputs) > 0.5).int().cpu().numpy()
 
         return mlb.inverse_transform(preds)[0]
+
 
 #############################################
 # ДЕМОНСТРАЦИЯ
