@@ -17,18 +17,19 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import classification_report, f1_score
 
 from tqdm import tqdm
+import fasttext
 
 tqdm.pandas()
 
 # Suppressing sklearn warnings about empty classes
 warnings.filterwarnings("ignore", category=UserWarning)
 
-##############################################
+
 # CONFIGURATION
-##############################################
+
 
 # Folder with the TMDB dataset - place it next to the script
-DATASET_DIR = "../IMDb Movie Genre Classification"
+DATASET_DIR = "IMDb Movie Genre Classification"
 OVERVIEW_PATH = os.path.join(DATASET_DIR, "movies_overview.csv")
 GENRES_PATH = os.path.join(DATASET_DIR, "movies_genres.csv")
 
@@ -45,7 +46,7 @@ PATIENCE = 10  # Early stopping: stop if val F1 does not increase N epochs
 FASTTEXT_PATH = "cc.en.300.bin"  # path to the FastText file next to the script
 FASTTEXT_DIM = 300  # dimension of FastText vectors
 
-# GPU → MPS (Apple Silicon) → CPU
+# GPU => MPS (Apple Silicon) => CPU
 device = torch.device(
     "cuda" if torch.cuda.is_available()
     else "mps" if torch.backends.mps.is_available()
@@ -53,9 +54,9 @@ device = torch.device(
 )
 print(f"Device for training: {device}")
 
-##############################################
+
 # LOADING AND MERGING DATA (TMDB format)
-##############################################
+
 
 for path in (OVERVIEW_PATH, GENRES_PATH):
     if not os.path.exists(path):
@@ -67,16 +68,16 @@ for path in (OVERVIEW_PATH, GENRES_PATH):
 
 print("Downloading...")
 
-# movies_genres.csv → dict {id: name}
+# movies_genres.csv => dict {id: name}
 genres_df = pd.read_csv(GENRES_PATH)
 id_to_name = dict(zip(genres_df["id"], genres_df["name"]))
 
-# movies_overview.csv → overview, genre_ids
+# movies_overview.csv => overview, genre_ids
 overview_df = pd.read_csv(OVERVIEW_PATH)
 overview_df = overview_df[["overview", "genre_ids"]].dropna()
 
 
-# genre_ids — str: "[18, 80]", converting id → name
+# genre_ids — str: "[18, 80]", converting id => name
 def parse_genre_ids(x):
     try:
         ids = ast.literal_eval(x) if isinstance(x, str) else x
@@ -109,9 +110,9 @@ def clean_text(text: str) -> str:
 print("Cleaning texts...")
 df[TEXT_COLUMN] = df[TEXT_COLUMN].progress_apply(clean_text)
 
-##############################################
+
 # DATA PARTITION
-##############################################
+
 
 X_train_raw, X_temp, y_train_raw, y_temp = train_test_split(
     df[TEXT_COLUMN],
@@ -137,14 +138,13 @@ print(f"Training set: {len(X_train_raw)} examples")
 print(f"Test sample: {len(X_test_raw)} examples")
 print(f"Number of genres: {len(mlb.classes_)}")
 
-##############################################
+
 # VECTORIZATION - FastText with TF-IDF weighting
 # We build TF-IDF only for word weights (IDF) -
 # we take the vectors themselves from FastText
 # Important rare words ("heist", "dystopian") get more weight
-##############################################
 
-import fasttext
+
 
 if not os.path.exists(FASTTEXT_PATH):
     print(f"\n[!] FastText file not found: {os.path.abspath(FASTTEXT_PATH)}")
@@ -204,11 +204,11 @@ X_test = np.vstack(X_test_raw.progress_apply(text_to_weighted_vector).values)
 print(f"Vector: {X_train.shape[1]}D")
 
 
-##############################################
+
 # PYTORCH DATASET
 # FastText gives dense matrices (10k × 300) -
 # convert to tensor immediately
-##############################################
+
 
 class MovieDataset(Dataset):
     def __init__(self, X_dense, y_bin):
@@ -232,11 +232,11 @@ val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_w
 test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=True)
 
 
-##############################################
+
 # Model Architecture - MLP with residual connection
 # For FastText 300D input we use a deep network -
 # residual connection allows gradients to flow directly
-##############################################
+
 
 class MovieGenreClassifier(nn.Module):
     """MLP with residual connection for multi-label genre classification."""
@@ -282,9 +282,9 @@ NUM_CLASSES = y_train_bin.shape[1]
 model = MovieGenreClassifier(INPUT_DIM, NUM_CLASSES).to(device)
 print(f"\nModel: {sum(p.numel() for p in model.parameters()):,} parameters")
 
-##############################################
+
 # LOSS FUNCTION AND OPTIMIZER
-##############################################
+#
 
 pos_counts = y_train_bin.sum(axis=0)
 neg_counts = y_train_bin.shape[0] - pos_counts
@@ -307,9 +307,9 @@ scheduler = optim.lr_scheduler.ReduceLROnPlateau(
 use_amp = (device.type == "cuda")
 scaler = torch.amp.GradScaler(enabled=use_amp)
 
-##############################################
+#
 # Training
-##############################################
+
 print("\nTraining...")
 
 train_losses = []
@@ -395,13 +395,12 @@ metrics_df = pd.DataFrame({
     "micro_f1": train_f1_scores,
     "accuracy": train_accuracies
 })
-metrics_df.to_csv("training_history.csv", index=False)
+metrics_df.to_csv("training_history_fasttext.csv", index=False)
 print("Training history saved in training_history.csv")
 
-##############################################
+
 # SEARCHING FOR THE OPTIMUM THRESHOLD FOR VALIDATION
 # Do it BEFORE the test evaluation to apply best_t on the test
-##############################################
 
 val_probs = []
 val_true = []
@@ -435,9 +434,8 @@ print(f" BEST MICRO F1 (val): {round(best_f1, 4)}")
 # THRESHOLD is used for training only (0.5 is mathematically correct for BCE).
 # For inference and testing we always use the best_t found in validation.
 
-##############################################
+
 # QUALITY ASSESSMENT ON THE TEST (with best_t)
-##############################################
 
 model.eval()
 all_preds = []
@@ -465,12 +463,8 @@ print("Micro F1:", micro)
 print("Macro F1:", macro)
 
 
-##############################################
-# INFERENCE - prediction for a new text
-##############################################
-
-def predict_genres(text: str) -> tuple:
-    """Accepts raw text → returns a tuple of predicted genres."""
+def predict_genres(text: str) -> tuple:  # prediction for a new text
+    """Accepts raw text => returns a tuple of predicted genres."""
     model.eval()
     with torch.no_grad():
         cleaned = clean_text(text)
@@ -482,10 +476,7 @@ def predict_genres(text: str) -> tuple:
         return mlb.inverse_transform(preds)[0]
 
 
-##############################################
-# DEMONSTRATION
-##############################################
-
+# DEMONSTRATION of usage
 example = """
 A group of astronauts travel through space to save humanity from a dying Earth.
 They encounter strange anomalies, dangerous black holes, and distant unknown planets.
