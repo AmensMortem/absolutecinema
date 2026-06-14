@@ -281,7 +281,7 @@ metrics_df = pd.DataFrame({
     "micro_f1": train_f1_scores,
     "accuracy": train_accuracies
 })
-metrics_df.to_csv("training_history.csv", index=False)
+metrics_df.to_csv("training_history_disBert.csv", index=False)
 
 #############################################
 # Search for optimal threshold on validation
