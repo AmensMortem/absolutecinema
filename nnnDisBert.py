@@ -32,7 +32,7 @@ GENRES_PATH = "IMDb Movie Genre Classification/movies_genres.csv"
 TEXT_COLUMN = "overview"
 GENRE_COLUMN = "genre_names"
 
-RANDOM_STATE  = 42
+RANDOM_STATE = 42
 BATCH_SIZE = 16
 EPOCHS = 40
 LEARNING_RATE = 2e-5
@@ -396,7 +396,7 @@ def predict_genres(text: str, mode: str = "precision") -> tuple:
         attention_mask = encoding["attention_mask"].to(device)
         outputs = model(input_ids, attention_mask)
         preds = (torch.sigmoid(outputs) > threshold).int().cpu().numpy()
-        return mlb.inverse_transform(preds)[0]
+        return mlb.inverse_transform(preds)[0]    
 
 
 # Demonstration
