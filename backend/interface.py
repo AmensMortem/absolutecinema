@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 from sklearn.preprocessing import MultiLabelBinarizer
 from transformers import DistilBertTokenizerFast, DistilBertModel
+from .final_version import train
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -48,9 +49,13 @@ def load_model(load_dir: str):
     required = ["model_weights.pt", "mlb_classes.npy", "thresholds.json", "config.json"]
     missing = [f for f in required if not os.path.exists(os.path.join(load_dir, f))]
     if missing:
-        print(f"[!] Missing files in {load_dir}: {missing}")
-        sys.exit(1)
+        print(f"There's no existing model at {load_dir}")
+        print("Now starting model learning, it may take some time.")
+        train()
+        print("Model training completed, trying to connect to model one more time...")
+        load_model(load_dir)
 
+    print("Model loaded successfully!")
     with open(os.path.join(load_dir, "config.json")) as f:
         cfg = json.load(f)
 

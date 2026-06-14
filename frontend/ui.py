@@ -1,10 +1,11 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QLabel, QPushButton
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QLabel, QPushButton, QApplication
 from PyQt5.QtGui import QMovie, QFont
 from PyQt5.QtCore import Qt
-from absolutecinema.backend import interface
+from backend.interface import predict, load_model
 import sys
+import os
 
-model, tokenizer, mlb, thresholds, max_len = interface.load_model("./saved_model")
+model, tokenizer, mlb, thresholds, max_len = load_model("./saved_model")
 
 
 class GifBackgroundApp(QWidget):
@@ -20,7 +21,8 @@ class GifBackgroundApp(QWidget):
         self.bg_label = QLabel(self)
         self.bg_label.setGeometry(0, 0, y, x)
 
-        self.movie = QMovie("sad-koi.gif")
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        self.movie = QMovie(os.path.join(BASE_DIR, "sad-koi.gif"))
         self.bg_label.setMovie(self.movie)
         self.bg_label.setScaledContents(True)
         self.movie.start()
@@ -75,7 +77,7 @@ class GifBackgroundApp(QWidget):
     def backend(self, user_text):
         if not user_text.strip():
             return "You didn't type anything!"
-        genres = ", ".join(interface.predict(
+        genres = ", ".join(predict(
             text=user_text,
             model=model,
             tokenizer=tokenizer,
@@ -90,10 +92,3 @@ class GifBackgroundApp(QWidget):
         entered_text = self.input_field.text()
         output = self.backend(entered_text)
         self.result_label.setText(output)
-
-
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    ex = GifBackgroundApp()
-    ex.show()
-    sys.exit(app.exec_stdout() if hasattr(sys, 'exec_stdout') else app.exec_())
