@@ -105,11 +105,3 @@ def backend_(user_text):
         mode="precision"
     )
     return f"Processed: {genres}"
-
-
-if __name__ == '__main__':
-    print(backend_("A detective investigates a murder in 1940s Los Angeles."))
-    # app = QApplication(sys.argv)
-    # ex = GifBackgroundApp()
-    # ex.show()
-    # sys.exit(app.exec_stdout() if hasattr(sys, 'exec_stdout') else app.exec_())

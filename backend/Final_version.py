@@ -17,7 +17,6 @@ from transformers import DistilBertTokenizerFast, DistilBertModel, get_linear_sc
 
 from tqdm import tqdm
 
-from absolutecinema.backend.distilbert_vect import best_t_acc
 
 tqdm.pandas()
 
