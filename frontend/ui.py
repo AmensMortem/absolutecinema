@@ -4,13 +4,16 @@ from PyQt5.QtGui import QMovie, QFont
 from PyQt5.QtCore import Qt
 from ..backend import interface
 
+model, tokenizer, mlb, thresholds, max_len = interface.load_model("./saved_model")
+
+
 class GifBackgroundApp(QWidget):
     def __init__(self):
         super().__init__()
         self.initUI()
 
     def initUI(self):
-        y,x = 889, 500
+        y, x = 889, 500
         self.setFixedSize(y, x)
         self.setWindowTitle("Main")
 
@@ -72,7 +75,16 @@ class GifBackgroundApp(QWidget):
     def backend(self, user_text):
         if not user_text.strip():
             return "You didn't type anything!"
-        return f"Processed: {interface.predict(user_text)}"
+        genres = interface.predict(
+            text="A detective investigates a murder in 1940s Los Angeles.",
+            model=model,
+            tokenizer=tokenizer,
+            mlb=mlb,
+            thresholds=thresholds,
+            max_len=max_len,
+            mode="precision"
+        )
+        return f"Processed: {genres}"
 
     def handle_submit(self):
         entered_text = self.input_field.text()
