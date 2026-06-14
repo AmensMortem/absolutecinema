@@ -1,7 +1,6 @@
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLineEdit, QLabel, QPushButton
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QLabel, QPushButton
 from PyQt5.QtGui import QMovie, QFont
 from PyQt5.QtCore import Qt
-import sys
 from absolutecinema.backend import interface
 
 model, tokenizer, mlb, thresholds, max_len = interface.load_model("./saved_model")
