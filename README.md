@@ -3,6 +3,7 @@
 This report presents the work of our group on multi-label movie genre classification from short text descriptions. The
 task is to assign one or more genres to each movie - it's quite a tricky problem, since genres are subjective,
 descriptions are short, and the label distribution is heavily imbalanced.
+#RUN final_version.py in backend
 
 ### We built and compared three different systems:
 
