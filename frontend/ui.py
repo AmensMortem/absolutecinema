@@ -2,6 +2,8 @@ import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLineEdit, QLabel, QPushButton
 from PyQt5.QtGui import QMovie, QFont
 from PyQt5.QtCore import Qt
+from transformers.testing_utils import backend
+
 from ..backend import interface
 
 model, tokenizer, mlb, thresholds, max_len = interface.load_model("./saved_model")
@@ -76,7 +78,7 @@ class GifBackgroundApp(QWidget):
         if not user_text.strip():
             return "You didn't type anything!"
         genres = interface.predict(
-            text="A detective investigates a murder in 1940s Los Angeles.",
+            text=user_text,
             model=model,
             tokenizer=tokenizer,
             mlb=mlb,
@@ -93,7 +95,8 @@ class GifBackgroundApp(QWidget):
 
 
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    ex = GifBackgroundApp()
-    ex.show()
-    sys.exit(app.exec_stdout() if hasattr(sys, 'exec_stdout') else app.exec_())
+    print(backend("A detective investigates a murder in 1940s Los Angeles."))
+    # app = QApplication(sys.argv)
+    # ex = GifBackgroundApp()
+    # ex.show()
+    # sys.exit(app.exec_stdout() if hasattr(sys, 'exec_stdout') else app.exec_())
