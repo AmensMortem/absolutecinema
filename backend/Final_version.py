@@ -17,12 +17,12 @@ from transformers import DistilBertTokenizerFast, DistilBertModel, get_linear_sc
 
 from tqdm import tqdm
 
+from absolutecinema.backend.distilbert_vect import best_t_acc
 
 tqdm.pandas()
 
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
-
 
 # Configuration
 
@@ -32,7 +32,7 @@ GENRES_PATH = "IMDb Movie Genre Classification/movies_genres.csv"
 TEXT_COLUMN = "overview"
 GENRE_COLUMN = "genre_names"
 
-RANDOM_STATE  = 42
+RANDOM_STATE = 42
 BATCH_SIZE = 16
 EPOCHS = 40
 LEARNING_RATE = 2e-5
@@ -54,6 +54,7 @@ id_to_name = dict(zip(genres_df["id"], genres_df["name"]))
 overview_df = pd.read_csv(OVERVIEW_PATH)
 overview_df = overview_df[["overview", "genre_ids"]].dropna()
 
+
 # genre_ids — str: "[18, 80]", converting id -> name
 def parse_genre_ids(x):
     try:
@@ -62,13 +63,13 @@ def parse_genre_ids(x):
     except Exception:
         return []
 
+
 overview_df[GENRE_COLUMN] = overview_df["genre_ids"].apply(parse_genre_ids)
 
 # deleting rows without genres
 overview_df = overview_df[overview_df[GENRE_COLUMN].map(len) > 0]
 df = overview_df[[TEXT_COLUMN, GENRE_COLUMN]].reset_index(drop=True)
 print(f"Movies are downloaded: {len(df)}")
-
 
 # Splitting data
 
@@ -90,12 +91,12 @@ print(f"Train: {len(X_train_raw)} samples")
 print(f"Test: {len(X_test_raw)} samoles")
 print(f"Number of genres: {len(mlb.classes_)}")
 
-
 # DistilBERT Tokenization
 
 print("DistilBERT downloading")
 tokenizer = DistilBertTokenizerFast.from_pretrained("distilbert-base-uncased")
 print("Success.")
+
 
 class MovieBertDataset(Dataset):
     def __init__(self, texts, labels):
@@ -118,12 +119,13 @@ class MovieBertDataset(Dataset):
             "labels": self.labels[idx]
         }
 
+
 train_dataset = MovieBertDataset(X_train_raw, y_train_bin)
 val_dataset = MovieBertDataset(X_val_raw, y_val_bin)
 test_dataset = MovieBertDataset(X_test_raw, y_test_bin)
 
 # num_workers=0 on Windows
-train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,  num_workers=0, pin_memory=True)
+train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0, pin_memory=True)
 val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=True)
 test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=True)
 
@@ -158,10 +160,10 @@ class DistilBertGenreClassifier(nn.Module):
 
         return self.classifier(cls_output)
 
+
 NUM_CLASSES = y_train_bin.shape[1]
 model = DistilBertGenreClassifier(NUM_CLASSES).to(device)
 print(f"\nModel: {sum(p.numel() for p in model.parameters()):,} parameters")
-
 
 # Loss Function
 
@@ -188,7 +190,6 @@ scheduler = get_linear_schedule_with_warmup(
 use_amp = (device.type == "cuda")
 scaler = GradScaler("cuda", enabled=use_amp)
 
-
 # Training
 
 print("\nTraining...")
@@ -205,7 +206,7 @@ for epoch in range(EPOCHS):
     model.train()
     running_loss = 0.0
 
-    for batch in tqdm(train_loader, desc=f"Эпоха {epoch+1}/{EPOCHS}", leave=False):
+    for batch in tqdm(train_loader, desc=f"Эпоха {epoch + 1}/{EPOCHS}", leave=False):
         input_ids = batch["input_ids"].to(device, non_blocking=True)
         attention_mask = batch["attention_mask"].to(device, non_blocking=True)
         labels = batch["labels"].to(device, non_blocking=True)
@@ -250,7 +251,7 @@ for epoch in range(EPOCHS):
     train_f1_scores.append(micro)
     train_accuracies.append(accuracy)
 
-    print(f"Epoch [{epoch+1}/{EPOCHS}] Loss: {epoch_loss:.4f} | "
+    print(f"Epoch [{epoch + 1}/{EPOCHS}] Loss: {epoch_loss:.4f} | "
           f"Val Micro F1: {micro:.4f} | Val Macro F1: {macro:.4f} | "
           f"Val Accuracy: {accuracy:.4f} (exact match)")
 
@@ -262,7 +263,7 @@ for epoch in range(EPOCHS):
     else:
         no_improve_epochs += 1
         if no_improve_epochs >= PATIENCE:
-            print(f"\nEarly stopping на эпохе {epoch+1} — val F1 не улучшался {PATIENCE} эпох.")
+            print(f"\nEarly stopping на эпохе {epoch + 1} — val F1 не улучшался {PATIENCE} эпох.")
             break
 
 if best_model_state is not None:
@@ -276,7 +277,6 @@ metrics_df = pd.DataFrame({
     "accuracy": train_accuracies
 })
 metrics_df.to_csv("training_history_final.csv", index=False)
-
 
 # Search for optimal threshold on validation
 
@@ -296,7 +296,6 @@ with torch.no_grad():
 val_probs = np.array(val_probs)
 val_true = np.array(val_true)
 
-
 # Threshold High Precision (recall >= 35%)
 best_t_prec = 0.5
 best_prec = 0.0
@@ -308,7 +307,6 @@ for t in np.arange(0.3, 0.95, 0.02):
     if prec > best_prec:
         best_prec = prec
         best_t_prec = t
-
 
 print(f" BEST THRESHOLD (High Precision): {round(best_t_prec, 2)}  → Precision={round(best_prec, 4)}")
 
@@ -330,12 +328,13 @@ def evaluate(threshold, label):
     prec = precision_score(all_true_list, p, average="micro", zero_division=0)
     rec = recall_score(all_true_list, p, average="micro", zero_division=0)
     acc = np.mean(np.all(p == np.array(all_true_list), axis=1))
-    print(f"\n=== {label} (порог={round(threshold,2)}) ===")
+    print(f"\n=== {label} (порог={round(threshold, 2)}) ===")
     print(f"Precision: {prec:.4f}")
     print(f"Recall: {rec:.4f}")
     print(f"Micro F1: {micro:.4f}")
-    print(f"Exact Match Accuracy: {acc:.4f} ({acc*100:.1f}%)")
+    print(f"Exact Match Accuracy: {acc:.4f} ({acc * 100:.1f}%)")
     return p
+
 
 all_true_list = []
 with torch.no_grad():
@@ -374,8 +373,16 @@ def predict_genres(text: str, mode: str = "precision") -> tuple:
 
 
 # Demonstration
+from absolutecinema.backend.save_model import save_model
 
-
+save_model(
+    save_dir="./saved_model",
+    model=model,
+    mlb=mlb,
+    best_t_prec=best_t_prec,
+    num_classes=NUM_CLASSES,
+    max_len=MAX_LEN,
+)
 '''example = """
 A group of astronauts travel through space to save humanity from a dying Earth.
 They encounter strange anomalies, dangerous black holes, and distant unknown planets.

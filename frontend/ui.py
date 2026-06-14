@@ -1,8 +1,6 @@
-import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLineEdit, QLabel, QPushButton
 from PyQt5.QtGui import QMovie, QFont
 from PyQt5.QtCore import Qt
-from transformers.testing_utils import backend
 
 from absolutecinema.backend import interface
 
