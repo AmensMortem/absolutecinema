@@ -45,8 +45,7 @@ FASTTEXT_DIM = 300  # dimension of FastText vectors
 device = torch.device(
     "cuda" if torch.cuda.is_available()
     else "mps" if torch.backends.mps.is_available()
-    else "cpu"
-)
+    else "cpu")
 print(f"Device for training: {device}")
 
 # LOADING AND MERGING DATA (TMDB format)

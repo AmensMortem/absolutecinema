@@ -38,7 +38,10 @@ THRESHOLD = 0.5
 PATIENCE = 5  # BERT converges quickly -> patience less
 MAX_LEN = 128  # maximum length of tokens
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(
+    "cuda" if torch.cuda.is_available()
+    else "mps" if torch.backends.mps.is_available()
+    else "cpu")
 print(f"Training device: {device}")
 
 # loading and merging data tmdb format
