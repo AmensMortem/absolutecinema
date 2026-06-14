@@ -82,16 +82,16 @@ We use four metrics:
 * Precision - what fraction of predicted genre assignments are correct.
 * Recall - what fraction of true genres we actually caught.
 * Exact Match Accuracy - actually if we predicted Strictest metric, naturally low.
-* Lose -
+* Loss - mathematical measure of prediction error that model tries to minimize during training.
 
 # Results
 
 * TF-IDF + MLP:
     * micro f1: 0.55
-    * lose: 0.13
+    * loss: 0.13
 * FastText + MLP:
     * micro f1: 0.6
-    * lose: 0.23
+    * loss: 0.23
 * DistilBERT:
     * micro f1: 0.66
-    * lose: 0.015
+    * loss: 0.015
