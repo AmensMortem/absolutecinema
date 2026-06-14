@@ -32,7 +32,7 @@ GENRES_PATH = "IMDb Movie Genre Classification/movies_genres.csv"
 TEXT_COLUMN = "overview"
 GENRE_COLUMN = "genre_names"
 
-RANDOM_STATE = 42
+RANDOM_STATE  = 42
 BATCH_SIZE = 16
 EPOCHS = 40
 LEARNING_RATE = 2e-5
@@ -296,23 +296,6 @@ with torch.no_grad():
 val_probs = np.array(val_probs)
 val_true = np.array(val_true)
 
-# Threshold for Micro F1
-best_t = 0.5
-best_f1 = 0.0
-for t in np.arange(0.1, 0.9, 0.02):
-    f1 = f1_score(val_true, (val_probs > t), average="micro", zero_division=0)
-    if f1 > best_f1:
-        best_f1 = f1
-        best_t = t
-
-# Threshold Exact Match
-best_t_acc = 0.5
-best_acc = 0.0
-for t in np.arange(0.1, 0.95, 0.02):
-    acc = np.mean(np.all((val_probs > t) == val_true, axis=1))
-    if acc > best_acc:
-        best_acc = acc
-        best_t_acc = t
 
 # Threshold High Precision (recall >= 35%)
 best_t_prec = 0.5
@@ -326,9 +309,8 @@ for t in np.arange(0.3, 0.95, 0.02):
         best_prec = prec
         best_t_prec = t
 
-print(f"\n BEST THRESHOLD (Micro F1): {round(best_t, 2)}  → F1={round(best_f1, 4)}")
+
 print(f" BEST THRESHOLD (High Precision): {round(best_t_prec, 2)}  → Precision={round(best_prec, 4)}")
-print(f" BEST THRESHOLD (Exact Match): {round(best_t_acc, 2)}  → Accuracy={round(best_acc*100, 1)}%")
 
 
 # Test
@@ -360,9 +342,7 @@ with torch.no_grad():
     for batch in test_loader:
         all_true_list.extend(batch["labels"].numpy())
 
-all_preds_f1 = evaluate(best_t, "Режим Micro F1")
 all_preds_prec = evaluate(best_t_prec, "Режим High Precision")
-all_preds_acc = evaluate(best_t_acc, "Режим Exact Match")
 
 print("\n=== Report (High Precision режим) ===")
 print(classification_report(
@@ -375,12 +355,7 @@ print(classification_report(
 # Interface
 
 def predict_genres(text: str, mode: str = "precision") -> tuple:
-    if mode == "f1":
-        threshold = best_t
-    elif mode == "accuracy":
-        threshold = best_t_acc
-    else:
-        threshold = best_t_prec
+    threshold = best_t_prec
 
     model.eval()
     with torch.no_grad():
@@ -396,7 +371,7 @@ def predict_genres(text: str, mode: str = "precision") -> tuple:
         attention_mask = encoding["attention_mask"].to(device)
         outputs = model(input_ids, attention_mask)
         preds = (torch.sigmoid(outputs) > threshold).int().cpu().numpy()
-        return mlb.inverse_transform(preds)[0]    
+        return mlb.inverse_transform(preds)[0]
 
 
 # Demonstration
