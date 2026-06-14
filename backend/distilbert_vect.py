@@ -22,7 +22,7 @@ tqdm.pandas()
 warnings.filterwarnings("ignore", category=UserWarning)
 
 # Configuration
-DATASET_DIR = "../IMDb Movie Genre Classification"
+DATASET_DIR = "IMDb Movie Genre Classification"
 OVERVIEW_PATH = os.path.join(DATASET_DIR, "movies_overview.csv")
 GENRES_PATH = os.path.join(DATASET_DIR, "movies_genres.csv")
 
@@ -49,16 +49,16 @@ for path in (OVERVIEW_PATH, GENRES_PATH):
 
 print("Downloading...")
 
-# movies_genres.csv  →  dict {id: name}
+# movies_genres.csv  =>  dict {id: name}
 genres_df = pd.read_csv(GENRES_PATH)
 id_to_name = dict(zip(genres_df["id"], genres_df["name"]))
 
-# movies_overview.csv  →  overview, genre_ids
+# movies_overview.csv  =>  overview, genre_ids
 overview_df = pd.read_csv(OVERVIEW_PATH)
 overview_df = overview_df[["overview", "genre_ids"]].dropna()
 
 
-# genre_ids — str: "[18, 80]", converting id → name
+# genre_ids — str: "[18, 80]", converting id => name
 def parse_genre_ids(x):
     try:
         ids = ast.literal_eval(x) if isinstance(x, str) else x
@@ -139,7 +139,6 @@ test_dataset = MovieBertDataset(X_test_raw, y_test_bin)
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0, pin_memory=True)
 val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=True)
 test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=True)
-
 
 
 # MODEL = DistilBERT + classifier
@@ -246,7 +245,7 @@ for epoch in range(EPOCHS):
 
     # Validation
     model.eval()
-    all_preds = []
+    all_predictions = []
     all_true = []
 
     with torch.no_grad():
@@ -256,12 +255,12 @@ for epoch in range(EPOCHS):
             with torch.amp.autocast(device_type=device.type, enabled=use_amp):
                 outputs = model(input_ids, attention_mask)
             preds = (torch.sigmoid(outputs) > THRESHOLD).cpu().numpy()
-            all_preds.extend(preds)
+            all_predictions.extend(preds)
             all_true.extend(batch["labels"].numpy())
 
-    micro = f1_score(all_true, all_preds, average="micro", zero_division=0)
-    macro = f1_score(all_true, all_preds, average="macro", zero_division=0)
-    accuracy = np.mean(np.all(np.array(all_preds) == np.array(all_true), axis=1))
+    micro = f1_score(all_true, all_predictions, average="micro", zero_division=0)
+    macro = f1_score(all_true, all_predictions, average="macro", zero_division=0)
+    accuracy = np.mean(np.all(np.array(all_predictions) == np.array(all_true), axis=1))
 
     train_f1_scores.append(micro)
     train_accuracies.append(accuracy)
@@ -281,7 +280,6 @@ for epoch in range(EPOCHS):
             print(f"\nEarly stopping on epoch {epoch + 1} — val F1 didn't improve {PATIENCE} epoch.")
             break
 
-# Загружаем лучшие веса
 if best_model_state is not None:
     model.load_state_dict({k: v.to(device) for k, v in best_model_state.items()})
     print(f"Top weights loaded (val Micro F1 = {best_val_f1:.4f})")
@@ -292,7 +290,7 @@ metrics_df = pd.DataFrame({
     "micro_f1": train_f1_scores,
     "accuracy": train_accuracies
 })
-metrics_df.to_csv("training_history.csv", index=False)
+metrics_df.to_csv("training_history_distilbert.csv", index=False)
 print("The learning history is saved in training_history.csv")
 
 # SEARCHING FOR THE OPTIMAL THRESHOLD FOR VALIDATION
@@ -393,7 +391,7 @@ print(classification_report(
 # Prediction for a new text
 def predict_genres(text: str, mode: str = "precision") -> tuple:
     """
-    Takes raw text → returns a tuple of predicted genres.
+    Takes raw text => returns a tuple of predicted genres.
     mode="f1" — precision/recall balance
     mode="precision" - high precision, fewer unnecessary genres (default)
     mode="accuracy" — maximum exact match
