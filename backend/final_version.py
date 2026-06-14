@@ -387,7 +387,7 @@ A group of astronauts travel through space to save humanity from a dying Earth.
 They encounter strange anomalies, dangerous black holes, and distant unknown planets.
 """'''
 
-example = "When a menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman, James Gordon and Harvey Dent must work together to put an end to the madness."
+example = input('WRITE YOUT DESCRIPTION')
 
 print("\n=== Demo-prediction ===")
 print(f"Describtion: {example.strip()}")
