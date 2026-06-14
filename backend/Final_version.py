@@ -160,7 +160,7 @@ class DistilBertGenreClassifier(nn.Module):
 
 NUM_CLASSES = y_train_bin.shape[1]
 model = DistilBertGenreClassifier(NUM_CLASSES).to(device)
-print(f"\nМодель: {sum(p.numel() for p in model.parameters()):,} параметров")
+print(f"\nModel: {sum(p.numel() for p in model.parameters()):,} parameters")
 
 
 # Loss Function
