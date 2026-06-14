@@ -38,7 +38,7 @@ def train():
 
     RANDOM_STATE = 42
     BATCH_SIZE = 16
-    EPOCHS = 1
+    EPOCHS = 40
     LEARNING_RATE = 2e-5
     WEIGHT_DECAY = 1e-2
     THRESHOLD = 0.5
