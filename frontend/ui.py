@@ -2,7 +2,7 @@ import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLineEdit, QLabel, QPushButton
 from PyQt5.QtGui import QMovie, QFont
 from PyQt5.QtCore import Qt
-
+from ..backend import interface
 
 class GifBackgroundApp(QWidget):
     def __init__(self):
@@ -72,7 +72,7 @@ class GifBackgroundApp(QWidget):
     def backend(self, user_text):
         if not user_text.strip():
             return "You didn't type anything!"
-        return f"Processed: {user_text.upper()}"
+        return f"Processed: {interface.predict(user_text)}"
 
     def handle_submit(self):
         entered_text = self.input_field.text()

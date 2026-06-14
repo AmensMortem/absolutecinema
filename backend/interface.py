@@ -12,11 +12,10 @@ import torch.nn as nn
 from sklearn.preprocessing import MultiLabelBinarizer
 from transformers import DistilBertTokenizerFast, DistilBertModel
 
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-# arcitecture must be thae same with what we had before (need to be adopted to the model we'll use in the end)
+# architecture must be the same with what we had before (need to be adopted to the model we'll use in the end)
 class DistilBertGenreClassifier(nn.Module):
     def __init__(self, num_classes: int):
         super().__init__()
@@ -30,14 +29,14 @@ class DistilBertGenreClassifier(nn.Module):
         )
 
     def mean_pool(self, last_hidden_state, attention_mask):
-        mask   = attention_mask.unsqueeze(-1).float()
+        mask = attention_mask.unsqueeze(-1).float()
         summed = (last_hidden_state * mask).sum(dim=1)
         counts = mask.sum(dim=1).clamp(min=1e-9)
         return summed / counts
 
     def forward(self, input_ids, attention_mask):
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-        pooled  = self.mean_pool(outputs.last_hidden_state, attention_mask)
+        pooled = self.mean_pool(outputs.last_hidden_state, attention_mask)
         return self.classifier(pooled)
 
 
@@ -47,7 +46,7 @@ def load_model(load_dir: str):
     Returns: (model, tokenizer, mlb, thresholds, max_len)
     """
     required = ["model_weights.pt", "mlb_classes.npy", "thresholds.json", "config.json"]
-    missing  = [f for f in required if not os.path.exists(os.path.join(load_dir, f))]
+    missing = [f for f in required if not os.path.exists(os.path.join(load_dir, f))]
     if missing:
         print(f"[!] Missing files in {load_dir}: {missing}")
         sys.exit(1)
@@ -83,13 +82,13 @@ def load_model(load_dir: str):
 
 
 def predict(
-    text:       str,
-    model,
-    tokenizer,
-    mlb,
-    thresholds: dict,
-    max_len:    int,
-    mode:       str = "precision",
+        text: str,
+        model,
+        tokenizer,
+        mlb,
+        thresholds: dict,
+        max_len: int,
+        mode: str = "precision",
 ) -> tuple:
     """
     Predicts genres for a single text description.
